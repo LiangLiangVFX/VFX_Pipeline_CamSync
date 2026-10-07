@@ -1,0 +1,36 @@
+# OS / IDE
+.DS_Store
+Thumbs.db
+*.swp
+*.bak
+*.pyc
+__pycache__/
+.idea/
+.vscode/
+
+# Maya
+*.log
+*.mb.swp
+*.ma.swp
+
+# Unreal Engine (必须排除中间与运行时生成文件)
+Binaries/
+Build/
+DerivedDataCache/
+Intermediate/
+Saved/
+.vs/
+*.sln
+**/Plugins/*/Binaries/
+**/Plugins/*/Intermediate/
+
+# 运行时临时状态文件与本地持久化配置
+*.json
+!Shared/schemas/*.json
+UECamWorkflowConfig.json
+cam_workflow_config.json
+cam_workflow_cache.json
+
+# Nuke
+.nuke/autosave*
+*.nk~
