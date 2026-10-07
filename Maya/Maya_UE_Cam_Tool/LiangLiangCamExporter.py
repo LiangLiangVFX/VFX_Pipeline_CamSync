@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-Maya -> UE 镜头交付标准工具 (最新稳定基准版本 - 全 Emoji 图标强化 + 状态自感知防丢)
+Maya -> UE 镜头交付标准工具 (按钮次序优化 + 界面完美三等分自适应版)
 Author: LiangLiangArtist
 Contact: liangliangvfx@gmail.com
 """
@@ -48,7 +48,7 @@ class MayaToUECamExporterUI(object):
         self.win = cmds.window(
             self.win_name, 
             title="Maya -> UE 镜头交付工具 [LiangLiangArtist]", 
-            widthHeight=(410, 645), 
+            widthHeight=(410, 665), 
             sizeable=True
         )
         
@@ -60,7 +60,7 @@ class MayaToUECamExporterUI(object):
 
         # ----------------- 区域 1：镜头基本信息与帧率规范 -----------------
         scene_path = cmds.file(query=True, sceneName=True)
-        shot_name, ep_name = self.parse_shot_info(scene_path)
+        shot_name, ep_name, is_empty_scene = self.parse_shot_info(scene_path)
 
         orig_start_f = int(cmds.playbackOptions(query=True, minTime=True))
         orig_end_f = int(cmds.playbackOptions(query=True, maxTime=True))
@@ -73,16 +73,29 @@ class MayaToUECamExporterUI(object):
 
         cmds.frameLayout(label=" 镜头基本信息与帧率规范 ", collapsable=False, marginWidth=6, marginHeight=5)
         cmds.columnLayout(adjustableColumn=True, rowSpacing=2)
+
+        # 空场景显式黄色告警提示条
+        if is_empty_scene:
+            cmds.text(
+                label="⚠️ 当前为未命名的空工程，未能识别镜头信息，请核对输入", 
+                backgroundColor=[0.42, 0.35, 0.18], 
+                height=22,
+                align="center",
+                font="boldLabelFont"
+            )
+            cmds.separator(height=2, style='none')
         
         self.shot_field = cmds.textFieldGrp(
             label="镜头号 (Shot):", 
             text=shot_name, 
+            placeholderText="如: 2180 (空场景请手动输入)",
             columnWidth2=(120, 235),
             changeCommand=lambda x: self.update_preview_lbl()
         )
         self.ep_field = cmds.textFieldGrp(
             label="集数 (Episode):", 
             text=ep_name, 
+            placeholderText="如: EP28",
             columnWidth2=(120, 235)
         )
         self.scene_frame_grp = cmds.intFieldGrp(
@@ -114,8 +127,9 @@ class MayaToUECamExporterUI(object):
             changeCommand=lambda x: self.update_preview_lbl()
         )
         
+        display_shot = shot_name if shot_name else "Shot"
         self.preview_lbl = cmds.text(
-            label=f"输出命名: cam{shot_name}_{plate_start_default}_{plate_end_default}.fbx (内部平移至 1~{duration} 帧)", 
+            label=f"输出命名: cam{display_shot}_{plate_start_default}_{plate_end_default}.fbx (内部平移至 1~{duration} 帧)", 
             align="center", 
             font="obliqueLabelFont"
         )
@@ -125,24 +139,53 @@ class MayaToUECamExporterUI(object):
         cmds.frameLayout(label=" 场景缩放与比例对准 (UE 厘米标准) ", collapsable=False, marginWidth=6, marginHeight=5)
         cmds.columnLayout(adjustableColumn=True, rowSpacing=3)
         
-        # 按钮统一规整带 Emoji
-        cmds.rowLayout(numberOfColumns=3, columnWidth3=(122, 122, 122))
-        cmds.button(label="🧍 生成参考人偶", height=24, backgroundColor=[0.3, 0.35, 0.42], command=self.spawn_ue_dummy)
-        cmds.button(label="❌ 清理人偶", height=24, command=self.remove_ue_dummy)
-        cmds.button(label="📦 选集打组 (Ctrl+G)", height=24, backgroundColor=[0.25, 0.38, 0.42], command=self.do_native_ctrl_g)
+        # 按钮三等分均分布局 (使用 formLayout 彻底消除边缘不均与溢出)
+        btn_form = cmds.formLayout(numberOfDivisions=100)
+        btn_grp = cmds.button(label="📦 选集打组 (Ctrl+G)", height=25, backgroundColor=[0.25, 0.38, 0.42], command=self.do_native_ctrl_g)
+        btn_dummy = cmds.button(label="🧍 生成参考人偶", height=25, backgroundColor=[0.3, 0.35, 0.42], command=self.spawn_ue_dummy)
+        btn_clean = cmds.button(label="❌ 清理人偶", height=25, command=self.remove_ue_dummy)
+
+        cmds.formLayout(
+            btn_form, edit=True,
+            attachForm=[
+                (btn_grp, 'top', 0), (btn_grp, 'bottom', 0), (btn_grp, 'left', 0),
+                (btn_dummy, 'top', 0), (btn_dummy, 'bottom', 0),
+                (btn_clean, 'top', 0), (btn_clean, 'bottom', 0), (btn_clean, 'right', 0)
+            ],
+            attachPosition=[
+                (btn_grp, 'right', 2, 33),
+                (btn_dummy, 'left', 2, 33), (btn_dummy, 'right', 2, 66),
+                (btn_clean, 'left', 2, 66)
+            ]
+        )
         cmds.setParent('..')
 
         cmds.button(
             label="🎯 选跟踪人偶 -> 吸附标准模型并对齐轴心", 
-            height=25, 
+            height=26, 
             backgroundColor=[0.32, 0.42, 0.52], 
             command=self.align_pivot_and_dummy_to_target
         )
 
-        cmds.rowLayout(numberOfColumns=3, columnWidth3=(122, 122, 122))
-        cmds.button(label="🔄 1x (原比例)", height=23, command=lambda x: self.set_scale_val(1))
-        cmds.button(label="🚀 100x (标准放大)", height=23, command=lambda x: self.set_scale_val(100))
-        cmds.text(label=" 拖动滑块实时缩放 ➔", align="center")
+        # 缩放倍率按钮行也采用等分对齐
+        scale_form = cmds.formLayout(numberOfDivisions=100)
+        btn_1x = cmds.button(label="🔄 1x (原比例)", height=23, command=lambda x: self.set_scale_val(1))
+        btn_100x = cmds.button(label="🚀 100x (标准放大)", height=23, command=lambda x: self.set_scale_val(100))
+        lbl_hint = cmds.text(label="拖动滑块实时缩放 ➔", align="center")
+
+        cmds.formLayout(
+            scale_form, edit=True,
+            attachForm=[
+                (btn_1x, 'top', 0), (btn_1x, 'bottom', 0), (btn_1x, 'left', 0),
+                (btn_100x, 'top', 0), (btn_100x, 'bottom', 0),
+                (lbl_hint, 'top', 0), (lbl_hint, 'bottom', 0), (lbl_hint, 'right', 0)
+            ],
+            attachPosition=[
+                (btn_1x, 'right', 2, 33),
+                (btn_100x, 'left', 2, 33), (btn_100x, 'right', 2, 66),
+                (lbl_hint, 'left', 2, 66)
+            ]
+        )
         cmds.setParent('..')
 
         # 自动继承场景中已存在的缩放组数值
@@ -176,27 +219,41 @@ class MayaToUECamExporterUI(object):
         cmds.frameLayout(label=" 虚幻空间坐标重定向 (可选：解决进UE原点偏远乱晃) ", collapsable=False, marginWidth=6, marginHeight=5)
         cmds.columnLayout(adjustableColumn=True, rowSpacing=3)
         
-        cmds.rowLayout(numberOfColumns=3, columnWidth3=(122, 122, 122))
-        cmds.button(
+        recenter_form = cmds.formLayout(numberOfDivisions=100)
+        btn_recenter_cam = cmds.button(
             label="🧭 相机首帧水平归零", 
             height=26, 
             backgroundColor=[0.35, 0.45, 0.40],
             annotation="【按需点击】将第1帧相机对准世界(0,0)，在UE挂Actor不会乱晃。不点则保持原位不变！",
             command=self.recenter_cam_start_to_origin
         )
-        cmds.button(
+        btn_recenter_sel = cmds.button(
             label="📍 选中目标对准零点", 
             height=26, 
             backgroundColor=[0.38, 0.40, 0.48],
             annotation="【按需点击】单选场景中特定台阶/简模点，将其对准原点",
             command=self.recenter_selection_to_origin
         )
-        cmds.button(
+        btn_restore = cmds.button(
             label="↩️ 还原原始世界坐标", 
             height=26, 
             backgroundColor=[0.45, 0.35, 0.35],
             annotation="点击可一键撤销归零操作，完全还原跟踪文件原始绝对坐标",
             command=self.restore_original_coordinates
+        )
+
+        cmds.formLayout(
+            recenter_form, edit=True,
+            attachForm=[
+                (btn_recenter_cam, 'top', 0), (btn_recenter_cam, 'bottom', 0), (btn_recenter_cam, 'left', 0),
+                (btn_recenter_sel, 'top', 0), (btn_recenter_sel, 'bottom', 0),
+                (btn_restore, 'top', 0), (btn_restore, 'bottom', 0), (btn_restore, 'right', 0)
+            ],
+            attachPosition=[
+                (btn_recenter_cam, 'right', 2, 33),
+                (btn_recenter_sel, 'left', 2, 33), (btn_recenter_sel, 'right', 2, 66),
+                (btn_restore, 'left', 2, 66)
+            ]
         )
         cmds.setParent('..')
         cmds.setParent(main_layout)
@@ -214,7 +271,7 @@ class MayaToUECamExporterUI(object):
 
         self.export_mesh_chk = cmds.checkBox(
             label="同时导出选中的匹配简模/点云 (自动排除参考人偶)", 
-            value=True
+            value=False
         )
         cmds.setParent(main_layout)
 
@@ -233,6 +290,51 @@ class MayaToUECamExporterUI(object):
         cmds.separator(height=4, style='none')
 
         cmds.showWindow(self.win)
+
+    def parse_shot_info(self, scene_path):
+        """解析工程名。若为空场景，返回空值与空场景标记，不强行填入假镜头"""
+        if not scene_path:
+            return "", "", True
+
+        shot, ep = "", ""
+        file_name = os.path.splitext(os.path.basename(scene_path))[0]
+        
+        ep_match = re.search(r'(ep[_\-]?\d+)', file_name, re.IGNORECASE)
+        if ep_match:
+            ep = ep_match.group(1).upper().replace('_', '').replace('-', '')
+
+        cleaned_name = re.sub(r'[_\-]v\d+', '', file_name, flags=re.IGNORECASE)
+        cleaned_name = re.sub(r'[_\-]version\d+', '', cleaned_name, flags=re.IGNORECASE)
+
+        ep_shot_match = re.search(r'ep[_\-]?\d+[_\-](\d{3,5})', file_name, re.IGNORECASE)
+        if ep_shot_match:
+            shot = ep_shot_match.group(1)
+        else:
+            tokens = re.split(r'[_\-\s]+', cleaned_name)
+            found_shot = None
+            for token in tokens:
+                if token.isdigit() and 3 <= len(token) <= 5:
+                    if ep and token not in ep:
+                        found_shot = token
+                        break
+                    elif not ep:
+                        found_shot = token
+                        break
+            if found_shot:
+                shot = found_shot
+            else:
+                shot_matches = re.findall(r'(\d{3,5})', cleaned_name)
+                if shot_matches:
+                    for sm in reversed(shot_matches):
+                        if ep and sm not in ep:
+                            shot = sm
+                            break
+                        elif not ep:
+                            shot = sm
+                            break
+
+        is_empty = (not shot and not ep)
+        return shot, ep, is_empty
 
     def recenter_cam_start_to_origin(self, *args):
         src_cam, _ = self.find_target_camera()
@@ -354,7 +456,7 @@ class MayaToUECamExporterUI(object):
         )
 
     def update_preview_lbl(self):
-        shot = cmds.textFieldGrp(self.shot_field, query=True, text=True).strip() or "shot"
+        shot = cmds.textFieldGrp(self.shot_field, query=True, text=True).strip() or "Shot"
         p_start = cmds.intFieldGrp(self.plate_frame_grp, query=True, value1=True)
         p_end = cmds.intFieldGrp(self.plate_frame_grp, query=True, value2=True)
         orig_s = cmds.intFieldGrp(self.scene_frame_grp, query=True, value1=True)
@@ -511,40 +613,6 @@ class MayaToUECamExporterUI(object):
                 -dialogStyle 1;
         ''')
 
-    def parse_shot_info(self, scene_path):
-        shot, ep = "2200", "ep28"
-        if scene_path:
-            file_name = os.path.splitext(os.path.basename(scene_path))[0]
-            
-            ep_match = re.search(r'(ep[_\-]?\d+)', file_name, re.IGNORECASE)
-            if ep_match:
-                ep = ep_match.group(1).lower().replace('_', '').replace('-', '')
-
-            cleaned_name = re.sub(r'[_\-]v\d+', '', file_name, flags=re.IGNORECASE)
-            cleaned_name = re.sub(r'[_\-]version\d+', '', cleaned_name, flags=re.IGNORECASE)
-
-            ep_shot_match = re.search(r'ep[_\-]?\d+[_\-](\d{3,5})', file_name, re.IGNORECASE)
-            if ep_shot_match:
-                shot = ep_shot_match.group(1)
-            else:
-                tokens = re.split(r'[_\-\s]+', cleaned_name)
-                found_shot = None
-                for token in tokens:
-                    if token.isdigit() and 3 <= len(token) <= 5:
-                        if token not in ep:
-                            found_shot = token
-                            break
-                if found_shot:
-                    shot = found_shot
-                else:
-                    shot_matches = re.findall(r'(\d{3,5})', cleaned_name)
-                    if shot_matches:
-                        for sm in reversed(shot_matches):
-                            if sm not in ep:
-                                shot = sm
-                                break
-        return shot, ep
-
     def find_target_camera(self):
         default_cams = ['persp', 'top', 'front', 'side']
         selected = cmds.ls(selection=True, long=True) or []
@@ -587,7 +655,11 @@ class MayaToUECamExporterUI(object):
         return False
 
     def do_export(self, *args):
-        shot = cmds.textFieldGrp(self.shot_field, query=True, text=True).strip() or "2160"
+        shot = cmds.textFieldGrp(self.shot_field, query=True, text=True).strip()
+        if not shot:
+            cmds.confirmDialog(title="输入缺失", message="请在上方输入有效的【镜头号 (Shot)】后再执行导出！", button=["确定"], icon="warning")
+            return
+
         orig_start = cmds.intFieldGrp(self.scene_frame_grp, query=True, value1=True)
         orig_end = cmds.intFieldGrp(self.scene_frame_grp, query=True, value2=True)
         
@@ -614,8 +686,6 @@ class MayaToUECamExporterUI(object):
             return
 
         duration = orig_end - orig_start + 1
-        internal_start = 1
-        internal_end = duration
         offset_val = 1 - orig_start
 
         if cmds.objExists(self.interactive_scale_grp):
