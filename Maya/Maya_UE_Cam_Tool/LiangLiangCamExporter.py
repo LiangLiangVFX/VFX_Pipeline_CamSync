@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-Maya -> UE 镜头交付标准工具 (按钮次序优化 + 界面完美三等分自适应版)
+Maya -> UE 镜头交付标准工具 (智能向上嗅探 ue/workarea 交付路径版)
 Author: LiangLiangArtist
 Contact: liangliangvfx@gmail.com
 """
@@ -40,6 +40,41 @@ class MayaToUECamExporterUI(object):
             'game': '15 fps'
         }
         return fps_map.get(time_unit, f"{time_unit}")
+
+    def resolve_default_export_dir(self, scene_path):
+        """
+        向上回溯检测 UE 规范目录：
+        路径规范：.../{ShotID}/ue/workarea/
+        若向上逐级遍历找到已存在的 ue/workarea，则优先使用；
+        否则兜底默认保存至当前 Maya 工程同级文件夹。
+        """
+        if not scene_path:
+            return cmds.workspace(query=True, rootDirectory=True).replace('\\', '/')
+
+        current_dir = os.path.normpath(os.path.dirname(scene_path)).replace('\\', '/')
+        fallback_dir = current_dir
+
+        # 向上回溯最多 6 层，搜寻 ue/workarea 结构
+        check_dir = current_dir
+        for _ in range(6):
+            target_ue_workarea = os.path.normpath(os.path.join(check_dir, "ue", "workarea")).replace('\\', '/')
+            if os.path.exists(target_ue_workarea) and os.path.isdir(target_ue_workarea):
+                print(f"[CamExporter] 成功智能嗅探到 UE 工作区目录: {target_ue_workarea}")
+                return target_ue_workarea
+
+            # 如果当前目录名本身就是 workarea 且其父级为 ue
+            if os.path.basename(check_dir).lower() == "workarea":
+                parent = os.path.basename(os.path.dirname(check_dir)).lower()
+                if parent == "ue" and os.path.exists(check_dir):
+                    return check_dir
+
+            parent_dir = os.path.dirname(check_dir)
+            if parent_dir == check_dir:
+                break
+            check_dir = parent_dir
+
+        print(f"[CamExporter] 未检测到 ue/workarea 文件夹，回退至工程同级目录: {fallback_dir}")
+        return fallback_dir
 
     def show_ui(self):
         if cmds.window(self.win_name, exists=True):
@@ -139,7 +174,7 @@ class MayaToUECamExporterUI(object):
         cmds.frameLayout(label=" 场景缩放与比例对准 (UE 厘米标准) ", collapsable=False, marginWidth=6, marginHeight=5)
         cmds.columnLayout(adjustableColumn=True, rowSpacing=3)
         
-        # 按钮三等分均分布局 (使用 formLayout 彻底消除边缘不均与溢出)
+        # 按钮三等分均分布局 (选集打组 -> 参考人偶 -> 清理人偶)
         btn_form = cmds.formLayout(numberOfDivisions=100)
         btn_grp = cmds.button(label="📦 选集打组 (Ctrl+G)", height=25, backgroundColor=[0.25, 0.38, 0.42], command=self.do_native_ctrl_g)
         btn_dummy = cmds.button(label="🧍 生成参考人偶", height=25, backgroundColor=[0.3, 0.35, 0.42], command=self.spawn_ue_dummy)
@@ -167,7 +202,6 @@ class MayaToUECamExporterUI(object):
             command=self.align_pivot_and_dummy_to_target
         )
 
-        # 缩放倍率按钮行也采用等分对齐
         scale_form = cmds.formLayout(numberOfDivisions=100)
         btn_1x = cmds.button(label="🔄 1x (原比例)", height=23, command=lambda x: self.set_scale_val(1))
         btn_100x = cmds.button(label="🚀 100x (标准放大)", height=23, command=lambda x: self.set_scale_val(100))
@@ -262,7 +296,9 @@ class MayaToUECamExporterUI(object):
         cmds.frameLayout(label=" 导出发布选项 ", collapsable=False, marginWidth=6, marginHeight=5)
         cmds.columnLayout(adjustableColumn=True, rowSpacing=3)
 
-        default_dir = os.path.dirname(scene_path).replace('\\', '/') if scene_path else cmds.workspace(query=True, rootDirectory=True).replace('\\', '/')
+        # 智能匹配导出目录：优先 ue/workarea，兜底为 Maya 自身同级目录
+        default_dir = self.resolve_default_export_dir(scene_path)
+
         cmds.rowLayout(numberOfColumns=3, columnWidth3=(120, 195, 55), adjustableColumn=2)
         cmds.text(label="导出路径:  ", align="right", width=120)
         self.path_field = cmds.textField(text=default_dir)
