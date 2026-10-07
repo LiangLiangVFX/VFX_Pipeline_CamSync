@@ -1,0 +1,22 @@
+{
+    "FileVersion": 3,
+    "Version": 1,
+    "VersionName": "1.0.0",
+    "FriendlyName": "Cam Workflow Tools",
+    "Description": "Maya 相机资产自动化组装工具集",
+    "Category": "Cinematics",
+    "CreatedBy": "LiangLiangArtist",
+    "CanContainContent": true,
+    "IsBetaVersion": false,
+    "Installed": false,
+    "Plugins": [
+        {
+            "Name": "PythonScriptPlugin",
+            "Enabled": true
+        },
+        {
+            "Name": "EditorScriptingUtilities",
+            "Enabled": true
+        }
+    ]
+}

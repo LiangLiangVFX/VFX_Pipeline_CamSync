@@ -1,0 +1,89 @@
+// =========================================================================
+// Pipeline Tool Auto-Deployment Script
+// Shelf: LiangLiangArtist | Tool: LiangLiangCamExporter
+// Author: LiangLiangArtist (liangliangvfx@gmail.com)
+// =========================================================================
+
+global proc dragDropInstaller() {
+    global string $gShelfTopLevel;
+
+    // 1. 获取源目录
+    string $whatIs = `whatIs dragDropInstaller`;
+    string $fullPath = `substring $whatIs 25 (size($whatIs))`;
+    string $installerDir = `substring $fullPath 1 (size($fullPath) - size("dragDropInstaller.mel"))`;
+    string $sourcePy =$installerDir + "LiangLiangCamExporter.py";
+    string $sourceIcon =$installerDir + "icon.png";
+    string $sourceModel =$installerDir + "SM_Pose.fbx";
+
+    // 2. 获取 Maya 脚本配置路径
+    string $userScriptDir = `internalVar -userScriptDir`;
+    string $userPrefDir = `internalVar -userPrefDir`;
+    string $userIconDir =$userPrefDir + "icons/";
+
+    string $targetPy =$userScriptDir + "LiangLiangCamExporter.py";
+    string $targetIcon =$userIconDir + "LiangLiangCam_icon.png";
+    string $targetModel =$userScriptDir + "SM_Pose.fbx";
+
+    // 3. 部署 Python 主功能代码
+    if (`file -q -ex $sourcePy`) {
+        sysFile -copy $targetPy$sourcePy;
+    } else {
+        error ("Deployment Error: Missing core file: " + $sourcePy);
+        return;
+    }
+
+    // 4. 部署图标
+    string $buttonIcon = "Camera.png";
+    if (`file -q -ex $sourceIcon`) {
+        sysFile -copy $targetIcon$sourceIcon;
+        $buttonIcon = "LiangLiangCam_icon.png";
+    }
+
+    // 5. 部署参考模型
+    if (`file -q -ex $sourceModel`) {
+        sysFile -copy $targetModel$sourceModel;
+    }
+
+    // 6. 注册至专属 Shelf: LiangLiangArtist
+    string $targetShelfName = "LiangLiangArtist";
+    if (`tabLayout -exists $gShelfTopLevel`) {
+        string $shelves[] = `tabLayout -q -childArray $gShelfTopLevel`;
+        int $exists = 0;
+        for ($s in$shelves) {
+            if ($s == $targetShelfName) {$exists = 1;
+                break;
+            }
+        }
+
+        if (!$exists) {
+            addNewShelfTab $targetShelfName;
+        }
+
+        tabLayout -e -selectTab $targetShelfName$gShelfTopLevel;
+
+        string $buttons[] = `shelfLayout -q -childArray $targetShelfName`;
+        for ($b in$buttons) {
+            if (`shelfButton -exists $b`) {
+                string $label = `shelfButton -q -label $b`;
+                if ($label == "UE_Cam") {
+                    deleteUI $b;
+                }
+            }
+        }
+
+        shelfButton
+            -parent $targetShelfName
+            -label "UE_Cam"
+            -annotation "UE Camera Exporter [by LiangLiangArtist]"
+            -image $buttonIcon
+            -command "import sys\nif 'LiangLiangCamExporter' in sys.modules:\n    import importlib\n    importlib.reload(sys.modules['LiangLiangCamExporter'])\nelse:\n    import LiangLiangCamExporter\nLiangLiangCamExporter.main()"
+            -sourceType "python";
+
+        saveAllShelves $gShelfTopLevel;
+
+        // 7. 使用 ASCII 转义字符安全传递中文，100% 杜绝不可见私有区字符与编码报错
+        python("import maya.cmds as cmds; cmds.confirmDialog(title='Installation Success', message='\\u3010LiangLiangCamExporter\\u3011\\u5de5\\u5177\\u5b89\\u88c5\\u6210\\u529f\\uff01\\n\\n\\u5df2\\u5728\\u5de5\\u5177\\u67b6\\u521b\\u5efa\\u4e13\\u5c5e\\u680f\\u76ee\\uff1a[LiangLiangArtist]\\n\\u70b9\\u51fb\\u5de5\\u5177\\u680f\\u56fe\\u6807\\u5373\\u53ef\\u542f\\u52a8\\u3002', button=['OK'], defaultButton='OK')");
+    }
+}
+
+dragDropInstaller();
