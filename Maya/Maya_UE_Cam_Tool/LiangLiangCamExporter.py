@@ -1,6 +1,9 @@
 # -*- coding: utf-8 -*-
 """
-Maya -> UE 镜头交付标准工具 (智能向上嗅探 ue/workarea 交付路径版)
+Maya -> UE 镜头交付标准工具 v1.0.0
+- 智能向上嗅探 ue/workarea 交付路径
+- 原样保留集数大小写格式
+- 底部集成 GitHub 与 YouTube 链接跳转
 Author: LiangLiangArtist
 Contact: liangliangvfx@gmail.com
 """
@@ -8,8 +11,11 @@ Contact: liangliangvfx@gmail.com
 import os
 import re
 import subprocess
+import webbrowser
 import maya.cmds as cmds
 import maya.mel as mel
+
+VERSION = "v1.0.0"
 
 class MayaToUECamExporterUI(object):
     def __init__(self):
@@ -54,7 +60,6 @@ class MayaToUECamExporterUI(object):
         current_dir = os.path.normpath(os.path.dirname(scene_path)).replace('\\', '/')
         fallback_dir = current_dir
 
-        # 向上回溯最多 6 层，搜寻 ue/workarea 结构
         check_dir = current_dir
         for _ in range(6):
             target_ue_workarea = os.path.normpath(os.path.join(check_dir, "ue", "workarea")).replace('\\', '/')
@@ -62,7 +67,6 @@ class MayaToUECamExporterUI(object):
                 print(f"[CamExporter] 成功智能嗅探到 UE 工作区目录: {target_ue_workarea}")
                 return target_ue_workarea
 
-            # 如果当前目录名本身就是 workarea 且其父级为 ue
             if os.path.basename(check_dir).lower() == "workarea":
                 parent = os.path.basename(os.path.dirname(check_dir)).lower()
                 if parent == "ue" and os.path.exists(check_dir):
@@ -82,15 +86,15 @@ class MayaToUECamExporterUI(object):
 
         self.win = cmds.window(
             self.win_name, 
-            title="Maya -> UE 镜头交付工具 [LiangLiangArtist]", 
-            widthHeight=(410, 665), 
+            title=f"Maya -> UE 镜头交付工具 {VERSION} [LiangLiangArtist]", 
+            widthHeight=(410, 715), 
             sizeable=True
         )
         
         main_layout = cmds.columnLayout(adjustableColumn=True, rowSpacing=4, columnOffset=["both", 12])
         
         cmds.separator(height=5, style='none')
-        cmds.text(label="【 Maya -> UE 镜头交付工具 】", font="boldLabelFont", align="center")
+        cmds.text(label=f"【 Maya -> UE 镜头交付工具 {VERSION} 】", font="boldLabelFont", align="center")
         cmds.separator(height=4, style='in')
 
         # ----------------- 区域 1：镜头基本信息与帧率规范 -----------------
@@ -109,7 +113,6 @@ class MayaToUECamExporterUI(object):
         cmds.frameLayout(label=" 镜头基本信息与帧率规范 ", collapsable=False, marginWidth=6, marginHeight=5)
         cmds.columnLayout(adjustableColumn=True, rowSpacing=2)
 
-        # 空场景显式黄色告警提示条
         if is_empty_scene:
             cmds.text(
                 label="⚠️ 当前为未命名的空工程，未能识别镜头信息，请核对输入", 
@@ -130,7 +133,7 @@ class MayaToUECamExporterUI(object):
         self.ep_field = cmds.textFieldGrp(
             label="集数 (Episode):", 
             text=ep_name, 
-            placeholderText="如: EP28",
+            placeholderText="如: ep28 或 EP28",
             columnWidth2=(120, 235)
         )
         self.scene_frame_grp = cmds.intFieldGrp(
@@ -222,7 +225,6 @@ class MayaToUECamExporterUI(object):
         )
         cmds.setParent('..')
 
-        # 自动继承场景中已存在的缩放组数值
         initial_scale_val = 100
         initial_max_slider = 2000
         if cmds.objExists(self.interactive_scale_grp):
@@ -296,7 +298,6 @@ class MayaToUECamExporterUI(object):
         cmds.frameLayout(label=" 导出发布选项 ", collapsable=False, marginWidth=6, marginHeight=5)
         cmds.columnLayout(adjustableColumn=True, rowSpacing=3)
 
-        # 智能匹配导出目录：优先 ue/workarea，兜底为 Maya 自身同级目录
         default_dir = self.resolve_default_export_dir(scene_path)
 
         cmds.rowLayout(numberOfColumns=3, columnWidth3=(120, 195, 55), adjustableColumn=2)
@@ -321,23 +322,52 @@ class MayaToUECamExporterUI(object):
         )
         
         cmds.separator(height=3, style='none')
-        cmds.text(label="Pipeline Tool developed by LiangLiangArtist", align="center", font="obliqueLabelFont")
+        cmds.text(label=f"Pipeline Tool {VERSION} developed by LiangLiangArtist", align="center", font="obliqueLabelFont")
         cmds.text(label="Contact: liangliangvfx@gmail.com", align="center", font="smallPlainLabelFont")
-        cmds.separator(height=4, style='none')
+        
+        # GitHub & YouTube 链接跳转按钮行
+        social_form = cmds.formLayout(numberOfDivisions=100)
+        btn_github = cmds.button(
+            label="🐙 GitHub", 
+            height=24, 
+            backgroundColor=[0.22, 0.24, 0.28],
+            command=lambda x: webbrowser.open_new_tab("https://github.com/LiangLiangVFX")
+        )
+        btn_youtube = cmds.button(
+            label="▶️ YouTube", 
+            height=24, 
+            backgroundColor=[0.38, 0.20, 0.20],
+            command=lambda x: webbrowser.open_new_tab("https://www.youtube.com/@zhaol2259")
+        )
 
+        cmds.formLayout(
+            social_form, edit=True,
+            attachForm=[
+                (btn_github, 'top', 0), (btn_github, 'bottom', 0), (btn_github, 'left', 20),
+                (btn_youtube, 'top', 0), (btn_youtube, 'bottom', 0), (btn_youtube, 'right', 20)
+            ],
+            attachPosition=[
+                (btn_github, 'right', 4, 50),
+                (btn_youtube, 'left', 4, 50)
+            ]
+        )
+        cmds.setParent('..')
+
+        cmds.separator(height=4, style='none')
         cmds.showWindow(self.win)
 
     def parse_shot_info(self, scene_path):
-        """解析工程名。若为空场景，返回空值与空场景标记，不强行填入假镜头"""
+        """解析工程名。保留原始大小写格式，不进行大写强制转换"""
         if not scene_path:
             return "", "", True
 
         shot, ep = "", ""
         file_name = os.path.splitext(os.path.basename(scene_path))[0]
         
+        # 识别集数：保持原样大小写
         ep_match = re.search(r'(ep[_\-]?\d+)', file_name, re.IGNORECASE)
         if ep_match:
-            ep = ep_match.group(1).upper().replace('_', '').replace('-', '')
+            ep = ep_match.group(1).replace('_', '').replace('-', '')
 
         cleaned_name = re.sub(r'[_\-]v\d+', '', file_name, flags=re.IGNORECASE)
         cleaned_name = re.sub(r'[_\-]version\d+', '', cleaned_name, flags=re.IGNORECASE)
