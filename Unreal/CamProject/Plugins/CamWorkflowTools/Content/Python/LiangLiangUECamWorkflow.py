@@ -3,6 +3,7 @@
 UE5.4 镜头资产自动化交付管线 (Media轨道素材真实帧长对齐版)
 - 保持原版控件变量名与装配逻辑 100% 不变
 - 智能递归嗅探工程既有 Shot 目录规范 (/Game/.../Shot)
+- 支持 Check 选项: 自主决定是否在定序器中添加 Media 轨道 (add_media_track)
 Author: LiangLiangArtist
 """
 
@@ -37,12 +38,10 @@ class UECamWorkflowPipeline(object):
 
     def get_saved_root_dir(self, default_dir="/Game/Shot"):
         """读取持久化保存的根目录路径 (优先动态嗅探工程中的规范 Shot 目录)"""
-        # 1. 优先检测工程实际存在的 Shot 目录
         scanned_dir = self.scan_existing_shot_directory()
         if scanned_dir:
             return scanned_dir
 
-        # 2. 其次读取本地保存的历史记忆配置
         try:
             if os.path.exists(CONFIG_FILE_PATH):
                 with open(CONFIG_FILE_PATH, 'r', encoding='utf-8') as f:
@@ -119,9 +118,6 @@ class UECamWorkflowPipeline(object):
             print(f"[CamWorkflow] 设置焦点属性提示: {e}")
 
     def get_or_create_shared_media_suite(self, user_root_path):
-        """
-        在 Shot 根目录统一维护一套全局单例：MediaPlayer + MediaTexture + 对位专用材质 M_Global_MediaPlate
-        """
         asset_sub = unreal.get_editor_subsystem(unreal.EditorAssetSubsystem)
         asset_tools = unreal.AssetToolsHelpers.get_asset_tools()
 
@@ -318,19 +314,14 @@ class UECamWorkflowPipeline(object):
         return ""
 
     def setup_media_background(self, target_folder, user_root_path, ep, shot, fps_val, level_seq, raw_shot_len, fbx_cam_path, user_bg_path=""):
-        """
-        根据素材实际帧长精确匹配 Media Section 长度，绝不向后超额铺满
-        """
         try:
             asset_tools = unreal.AssetToolsHelpers.get_asset_tools()
             asset_sub = unreal.get_editor_subsystem(unreal.EditorAssetSubsystem)
             
-            # 1. 镜头目录下创建专属的 bg 文件夹
             bg_folder = f"{target_folder}/bg"
             if not asset_sub.does_directory_exist(bg_folder):
                 asset_sub.make_directory(bg_folder)
 
-            # 2. 判断背景序列帧路径 (用户指定 vs 智能嗅探)
             final_bg_path = ""
             if user_bg_path and str(user_bg_path).strip() and os.path.exists(str(user_bg_path).strip()):
                 final_bg_path = str(user_bg_path).replace('\\', '/').strip()
@@ -338,7 +329,6 @@ class UECamWorkflowPipeline(object):
             else:
                 final_bg_path = self.find_potential_bg_sequence_path(fbx_cam_path)
 
-            # 计算素材真实的实际帧长
             actual_media_len = raw_shot_len
             if final_bg_path and os.path.exists(final_bg_path):
                 image_extensions = ('.exr', '.png', '.jpg', '.jpeg', '.tga', '.dpx', '.tif')
@@ -349,7 +339,6 @@ class UECamWorkflowPipeline(object):
                 except Exception:
                     pass
 
-            # 3. 创建该镜头专属的 ImgMediaSource
             source_name = f"{ep.lower()}_cam{shot}_bg"
             source_asset_path = f"{bg_folder}/{source_name}"
             
@@ -377,10 +366,8 @@ class UECamWorkflowPipeline(object):
                 else:
                     print(f"[CamWorkflow] 提示: 暂未提供或检测到背景序列帧，ImgMediaSource 保持静默占位")
 
-            # 4. 获取全局共用 MediaTexture 和 Material
             shared_media_tex, shared_mat = self.get_or_create_shared_media_suite(user_root_path)
 
-            # 5. 在 Level Sequence 中添加原生的 Media Track 轨道
             media_track = level_seq.add_track(unreal.MovieSceneMediaTrack)
             if media_track:
                 media_section = media_track.add_section()
@@ -400,7 +387,7 @@ class UECamWorkflowPipeline(object):
 
     def execute_workflow(self, fbx_cam_path, user_root_path="/Game/Shot", custom_ep="", fps_val=25.0, 
                          create_root_parent=True, create_image_plane=True, disable_focus=True, import_mesh_ref=True,
-                         bg_sequence_path=""):
+                         bg_sequence_path="", add_media_track=True):
         
         clean_fbx = str(fbx_cam_path).replace('\\', '/').strip()
         if not clean_fbx or not os.path.exists(clean_fbx):
@@ -409,7 +396,7 @@ class UECamWorkflowPipeline(object):
 
         self.save_root_dir(user_root_path)
 
-        # 1. 提取元数据 (包含实拍实际长度 raw_shot_len 以及 +1 帧把手后的 duration)
+        # 1. 提取元数据
         ep_det, shot, plate_s, plate_e, raw_shot_len, duration = self.parse_metadata_from_path(clean_fbx)
         ep = custom_ep.strip() if custom_ep.strip() else ep_det
 
@@ -490,8 +477,12 @@ class UECamWorkflowPipeline(object):
 
         self.ensure_camera_cuts_full_range(level_seq, duration)
 
-        # 7. 背景媒体与全局材质构建
-        shared_mat = self.setup_media_background(target_folder, user_root_path, ep, shot, fps_val, level_seq, raw_shot_len, clean_fbx, bg_sequence_path)
+        # 7. 根据 Check 选项判断是否构建 Media 轨道与资产
+        shared_mat = None
+        if add_media_track:
+            shared_mat = self.setup_media_background(target_folder, user_root_path, ep, shot, fps_val, level_seq, raw_shot_len, clean_fbx, bg_sequence_path)
+        else:
+            print("[CamWorkflow] 用户未勾选/禁用了 Media 轨道，已跳过 Media Track 构建。")
 
         # 8. 相机后续自动化装配 (Attach轨道 + ImagePlate赋予材质)
         if imported_cam_actor and imported_cam_binding:
@@ -519,7 +510,7 @@ class UECamWorkflowPipeline(object):
             if create_image_plane:
                 self.spawn_native_image_plate(imported_cam_actor, level_seq, shot, shared_mat=shared_mat, distance=400.0)
 
-        # 9. 扫描导入同目录简模
+       # 9. 扫描导入同目录简模 (完美对齐 FBX Import Options: 取消骨骼 + 开启 Nanite)
         dir_name = os.path.dirname(clean_fbx)
         cam_base = os.path.basename(clean_fbx).lower()
         if import_mesh_ref and os.path.exists(dir_name):
@@ -527,34 +518,87 @@ class UECamWorkflowPipeline(object):
                 if f.lower().endswith('.fbx') and f.lower() != cam_base:
                     mesh_path = os.path.join(dir_name, f).replace('\\', '/')
                     mesh_name = f"SM_Ref_{shot}"
+                    asset_pkg_path = f"{target_folder}/{mesh_name}"
                     
+                    asset_sub = unreal.get_editor_subsystem(unreal.EditorAssetSubsystem)
+                    actor_sub = unreal.get_editor_subsystem(unreal.EditorActorSubsystem)
+
+                    # 1. 彻底清除同名旧资产，防止 UE 强行沿用旧的 SkeletalMesh 类型定义
+                    if asset_sub.does_asset_exist(asset_pkg_path):
+                        asset_sub.delete_asset(asset_pkg_path)
+
+                    # 2. 精准映射截图中的 FBX Import Options 配置
+                    import_options = unreal.FbxImportUI()
+                    # 截图核心 1: 取消 Skeletal Mesh 勾选，强制锁定为 Static Mesh
+                    import_options.set_editor_property("mesh_type_to_import", unreal.FBXImportType.FBXIT_STATIC_MESH)
+                    import_options.set_editor_property("import_as_skeletal", False)
+                    import_options.set_editor_property("import_mesh", True)
+                    import_options.set_editor_property("import_animations", False)
+                    import_options.set_editor_property("import_materials", False)
+                    import_options.set_editor_property("import_textures", False)
+
+                    # 截图核心 2: 开启 Build Nanite + 合并碎模型
+                    sm_data = import_options.static_mesh_import_data
+                    sm_data.set_editor_property("combine_meshes", True)
+                    sm_data.set_editor_property("generate_lightmap_u_vs", False)
+                    
+                    # 激活 Nanite 设置 (对应截图中的 Build Nanite 勾选框)
+                    try:
+                        nanite_settings = sm_data.get_editor_property("nanite_settings")
+                        nanite_settings.set_editor_property("enabled", True)
+                        sm_data.set_editor_property("nanite_settings", nanite_settings)
+                    except Exception:
+                        pass
+
+                    # 3. 构造导入任务
                     task = unreal.AssetImportTask()
                     task.filename = mesh_path
                     task.destination_path = target_folder
                     task.destination_name = mesh_name
                     task.replace_existing = True
-                    task.automated = True
                     task.save = True
+                    task.options = import_options
+
+                    # -------------------------------------------------------------
+                    # 【注】：如果你想每次导入简模时都人工弹窗确认（弹出你截图里的窗口）：
+                    # 将下面这行设为 False 即可；若希望完全自动化不弹窗，则保持 True。
+                    task.automated = False  # 设为 False 会主动弹出你截图中的窗口，供你确认后点 Import
+                    # -------------------------------------------------------------
+
                     unreal.AssetToolsHelpers.get_asset_tools().import_asset_tasks([task])
                     
-                    imported_mesh = unreal.EditorAssetSubsystem().load_asset(f"{target_folder}/{mesh_name}")
-                    if imported_mesh:
-                        actor_sub = unreal.get_editor_subsystem(unreal.EditorActorSubsystem)
+                    imported_mesh = asset_sub.load_asset(asset_pkg_path)
+
+                    # 4. 导入后确保 Nanite 状态被永久写入并挂载
+                    if imported_mesh and isinstance(imported_mesh, unreal.StaticMesh):
+                        try:
+                            mesh_nanite = imported_mesh.get_editor_property("nanite_settings")
+                            if not mesh_nanite.get_editor_property("enabled"):
+                                mesh_nanite.set_editor_property("enabled", True)
+                                imported_mesh.set_editor_property("nanite_settings", mesh_nanite)
+                                asset_sub.save_asset(asset_pkg_path, only_if_is_dirty=False)
+                            print(f"[CamWorkflow] 静态简模 Nanite 确认激活: {mesh_name}")
+                        except Exception as n_err:
+                            print(f"[CamWorkflow] Nanite 校验提示: {n_err}")
+
+                        # 挂载到世界视口和大纲中
                         mesh_act = actor_sub.spawn_actor_from_class(unreal.StaticMeshActor, unreal.Vector(0,0,0), unreal.Rotator(0,0,0))
                         mesh_act.static_mesh_component.set_static_mesh(imported_mesh)
                         mesh_act.static_mesh_component.set_mobility(unreal.ComponentMobility.MOVABLE)
                         mesh_act.set_actor_label(f"SM_Ref_{shot}")
                         mesh_act.set_folder_path("/!Cam")
                         level_seq.add_possessable(mesh_act)
+                        print(f"[CamWorkflow] 静态简模已成功挂载至视口并加入定序器: SM_Ref_{shot}")
                     break
 
         # 刷新定序器
         unreal.LevelSequenceEditorBlueprintLibrary.refresh_current_level_sequence()
 
         # 弹窗提示
+        media_status_str = f"• 媒体中心: Media 轨道长度已严格对齐实拍素材 ({raw_shot_len}帧)" if add_media_track else "• 媒体中心: 未添加 Media 轨道 (跳过)"
         unreal.EditorDialog.show_message(
             "组装成功", 
-            f"【镜头交付组装完成】\n\n• 序列命名: {seq_name}\n• 目标路径: {target_folder}\n• 大纲归纳: 全部 Actor 已收纳至 [(!Cam)]\n• 媒体中心: Media 轨道长度已严格对齐实拍素材 ({raw_shot_len}帧)\n• 帧区间: 0001 ~ {duration:04d} 帧 (Camera Cuts 已铺满)\n• Attach轨道: 已在定序器永久绑定至 Shot_Root_{shot}", 
+            f"【镜头交付组装完成】\n\n• 序列命名: {seq_name}\n• 目标路径: {target_folder}\n• 大纲归纳: 全部 Actor 已收纳至 [(!Cam)]\n{media_status_str}\n• 帧区间: 0001 ~ {duration:04d} 帧 (Camera Cuts 已铺满)\n• Attach轨道: 已在定序器永久绑定至 Shot_Root_{shot}", 
             unreal.AppMsgType.OK
         )
         return True
@@ -628,7 +672,8 @@ def load_initial_root_dir_to_ui(widget_path):
             print(f"[CamWorkflow] 成功载入存储目录: {saved_dir}")
 
 def run_cam_workflow(fbx_path, root_dir="/Game/Shot", custom_ep="", fps_val="25.0", 
-                     create_root=True, create_plane=True, disable_focus=True, import_mesh=True, bg_path=""):
+                     create_root=True, create_plane=True, disable_focus=True, import_mesh=True, bg_path="",
+                     add_media_track=True):
     pipeline = UECamWorkflowPipeline()
     final_fps = 25.0
     try:
@@ -651,5 +696,6 @@ def run_cam_workflow(fbx_path, root_dir="/Game/Shot", custom_ep="", fps_val="25.
         create_image_plane=parse_bool(create_plane),
         disable_focus=parse_bool(disable_focus),
         import_mesh_ref=parse_bool(import_mesh),
-        bg_sequence_path=bg_path
+        bg_sequence_path=bg_path,
+        add_media_track=parse_bool(add_media_track)
     )
