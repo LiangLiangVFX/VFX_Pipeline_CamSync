@@ -1,0 +1,415 @@
+#! C:/Program Files/Nuke14.0v5/nuke-14.0.5.dll -nx
+#write_info Write_Final_PNG_2110 file:"C:/Users/zhaoliang/Documents/GitHub/VFX_Pipeline_CamSync/example/shot/wg/ep28/2110/ue/workarea/bg/bg_2110_%04d.png" format:"2048 1152 1" chans:":rgba.red:rgba.green:rgba.blue:rgba.alpha:" framerange:"1001 1039" fps:"0" colorspace:"default (sRGB)" datatype:"8 bit" transfer:"unknown" views:"main" colorManagement:"Nuke"
+version 14.0 v5
+define_window_layout_xml {<?xml version="1.0" encoding="UTF-8"?>
+<layout version="1.0">
+    <window x="0" y="0" w="1917" h="1008" screen="0">
+        <splitter orientation="1">
+            <split size="40"/>
+            <dock id="" hideTitles="1" activePageId="Toolbar.1">
+                <page id="Toolbar.1"/>
+            </dock>
+            <split size="1873" stretch="1"/>
+            <splitter orientation="2">
+                <split size="567"/>
+                <dock id="" activePageId="Viewer.1">
+                    <page id="Viewer.1"/>
+                    <page id="uk.co.thefoundry.scripteditor.1"/>
+                </dock>
+                <split size="399"/>
+                <dock id="" activePageId="Curve Editor.1">
+                    <page id="Curve Editor.1"/>
+                    <page id="DopeSheet.1"/>
+                </dock>
+            </splitter>
+        </splitter>
+    </window>
+    <window x="1918" y="0" w="1918" h="1008" screen="1">
+        <splitter orientation="1">
+            <split size="957"/>
+            <dock id="" activePageId="DAG.2" focus="true">
+                <page id="DAG.1"/>
+                <page id="DAG.2"/>
+            </dock>
+            <split size="957"/>
+            <dock id="" activePageId="Properties.1">
+                <page id="Properties.1"/>
+            </dock>
+        </splitter>
+    </window>
+</layout>
+}
+Root {
+inputs 0
+name C:/Users/zhaoliang/Documents/GitHub/VFX_Pipeline_CamSync/example/shot/wg/ep28/2110/ue/workarea/wanguzuiqiangzong_wgzqz_ep28_2110_ue_zl_v001.nk
+frame 1001
+first_frame 1001
+last_frame 1039
+fps 25
+format "2048 1152 0 0 2048 1152 1 "
+proxy_type scale
+proxy_format "1024 778 0 0 1024 778 1 1K_Super_35(full-ap)"
+colorManagement Nuke
+workingSpaceLUT linear
+monitorLut sRGB
+monitorOutLUT rec709
+int8Lut sRGB
+int16Lut sRGB
+logLut Cineon
+floatLut linear
+}
+BackdropNode {
+inputs 0
+name BackdropNode1
+tile_color 0x1a402500
+label "<center><b>Shot 2110 抠像底板生成 (色彩全联动·参数直通版)</b></center>"
+note_font_size 16
+xpos -40
+ypos -50
+bdwidth 600
+bdheight 320
+}
+Read {
+inputs 0
+file_type jpeg
+file W:/filmserver/wanguzuiqiangzong/shot/wgzqz/ep28/2110/v004/proxy-jpg/wanguzuiqiangzong_wgzqz_ep28_shot2110_v004.%04d.jpg
+first 1001
+last 1039
+origfirst 1001
+origlast 1039
+origset true
+raw {{"Clean_Keyer_Master_2110.color_mode == 1"}}
+name Read_Plate_2110
+xpos 0
+}
+set Ne505bc00 [stack 0]
+Roto {
+output alpha
+curves {{{v x3f99999a}
+  {f 0}
+  {n
+   {layer Root
+    {f 2097152}
+    {t x44800000 x44100000}
+    {a pt1x 0 pt1y 0 pt2x 0 pt2y 0 pt3x 0 pt3y 0 pt4x 0 pt4y 0 ptex00 0 ptex01 0 ptex02 0 ptex03 0 ptex10 0 ptex11 0 ptex12 0 ptex13 0 ptex20 0 ptex21 0 ptex22 0 ptex23 0 ptex30 0 ptex31 0 ptex32 0 ptex33 0 ptof1x 0 ptof1y 0 ptof2x 0 ptof2y 0 ptof3x 0 ptof3y 0 ptof4x 0 ptof4y 0 pterr 0 ptrefset 0 ptmot x40800000 ptref 0}
+    {curvegroup Bezier1 512 bezier
+     {{cc
+       {f 8192}
+       {px x447a4000
+        {0 0}
+        {x43d40000 x41a00000}
+        {0 0}
+        {0 xc0800000}
+        {x43dc0000 x43320000}
+        {0 x40800000}
+        {x40c00000 xc1c00000}
+        {x43b20000 x440c0000}
+        {xc0c00000 x41c00000}
+        {xc0000000 xc1f00000}
+        {x43ac0000 x44630000}
+        {x40000000 x41f00000}
+        {0 xc1400000}
+        {x43bb0000 x448cc000}
+        {0 x41400000}
+        {xc0000000 0}
+        {x43d10000 x44960000}
+        {x40000000 0}
+        {xc1900000 0}
+        {x44770000 x44a0c000}
+        {x41900000 0}
+        {xc1900000 x41200000}
+        {x44bd8000 x44a18000}
+        {x41900000 xc1200000}
+        {xc1400000 x41600000}
+        {x44d7c000 x44974000}
+        {x41400000 xc1600000}
+        {xc0c00000 x41a00000}
+        {x44dfc000 x44880000}
+        {x40c00000 xc1a00000}
+        {0 x41a00000}
+        {x44f44000 x441f0000}
+        {0 xc1a00000}
+        {x40800000 x41900000}
+        {x44ea4000 x43720000}
+        {xc0800000 xc1900000}
+        {x40c00000 x41200000}
+        {x44da0000 xc2780000}
+        {xc0c00000 xc1200000}
+        {x42d40000 x41200000}
+        {x44a04000 xc3320000}
+        {xc2d40000 xc1200000}
+        {x40800000 0}
+        {x43de0000 xc30c0000}
+        {xc0800000 0}}}     idem}
+     {tx x447a4000 x44829dde x441c199a}
+     {a osw x41200000 osf 0 str 1 spx x44800000 spy x44100000 sb 1 ltn x447a4000 ltm x447a4000 tt x40800000}}}}}}
+toolbox {selectAll {
+  { selectAll str 1 ssx 1 ssy 1 sf 1 }
+  { createBezier str 1 ssx 1 ssy 1 sf 1 sb 1 tt 4 }
+  { createBezierCusped str 1 ssx 1 ssy 1 sf 1 sb 1 }
+  { createBSpline str 1 ssx 1 ssy 1 sf 1 sb 1 }
+  { createEllipse str 1 ssx 1 ssy 1 sf 1 sb 1 }
+  { createRectangle str 1 ssx 1 ssy 1 sf 1 sb 1 }
+  { createRectangleCusped str 1 ssx 1 ssy 1 sf 1 sb 1 }
+  { brush str 1 ssx 1 ssy 1 sf 1 sb 1 }
+  { eraser src 2 str 1 ssx 1 ssy 1 sf 1 sb 1 }
+  { clone src 1 str 1 ssx 1 ssy 1 sf 1 sb 1 }
+  { reveal src 3 str 1 ssx 1 ssy 1 sf 1 sb 1 }
+  { dodge src 1 str 1 ssx 1 ssy 1 sf 1 sb 1 }
+  { burn src 1 str 1 ssx 1 ssy 1 sf 1 sb 1 }
+  { blur src 1 str 1 ssx 1 ssy 1 sf 1 sb 1 }
+  { sharpen src 1 str 1 ssx 1 ssy 1 sf 1 sb 1 }
+  { smear src 1 str 1 ssx 1 ssy 1 sf 1 sb 1 }
+} }
+toolbar_brush_hardness 0.200000003
+toolbar_source_transform_scale {1 1}
+toolbar_source_transform_center {1024 576}
+colorOverlay {0 0 0 0}
+lifetime_type "all frames"
+lifetime_start 1001
+lifetime_end 1001
+motionblur_shutter_offset_type centred
+source_black_outside true
+name Garbage_Roto_REMOVE_2110
+label "【圈不要的: 穿帮灯具/四周杂物圈选切除】"
+xpos 400
+}
+push $Ne505bc00
+Roto {
+output alpha
+curves {{{v x3f99999a}
+  {f 0}
+  {n
+   {layer Root
+    {f 2097152}
+    {t x44800000 x44100000}
+    {a pt1x 0 pt1y 0 pt2x 0 pt2y 0 pt3x 0 pt3y 0 pt4x 0 pt4y 0 ptex00 0 ptex01 0 ptex02 0 ptex03 0 ptex10 0 ptex11 0 ptex12 0 ptex13 0 ptex20 0 ptex21 0 ptex22 0 ptex23 0 ptex30 0 ptex31 0 ptex32 0 ptex33 0 ptof1x 0 ptof1y 0 ptof2x 0 ptof2y 0 ptof3x 0 ptof3y 0 ptof4x 0 ptof4y 0 pterr 0 ptrefset 0 ptmot x40800000 ptref 0}
+    {curvegroup Bezier1 512 bezier
+     {{cc
+       {f 8192}
+       {px x447a4000
+        {x40000000 0}
+        {x442a8000 x445c0000}
+        {xc0000000 0}
+        {0 0}
+        {x44240000 x446c8000}
+        {0 0}
+        {xc0800000 0}
+        {x44290000 x448b4000}
+        {x40800000 0}
+        {xc0000000 0}
+        {x44ac0000 x44998000}
+        {x40000000 0}
+        {xc0000000 x42080000}
+        {x44cbc000 x44378000}
+        {x40000000 xc2080000}
+        {x40c00000 x41a00000}
+        {x44c88000 x43940000}
+        {xc0c00000 xc1a00000}
+        {x40c00000 0}
+        {x44b2c000 x42100000}
+        {xc0c00000 0}
+        {x41400000 xc1400000}
+        {x4491c000 x42d80000}
+        {xc1400000 x41400000}
+        {x41900000 xc1c00000}
+        {x447e8000 x43970000}
+        {xc1900000 x41c00000}}}     idem}
+     {tx x447a4000 x448e31c7 x441cc71c}
+     {a osw x41200000 osf 0 str 1 spx x44800000 spy x44100000 sb 1 ltn x447a4000 ltm x447a4000 tt x40800000}}}}}}
+toolbox {selectAll {
+  { selectAll str 1 ssx 1 ssy 1 sf 1 }
+  { createBezier str 1 ssx 1 ssy 1 sf 1 sb 1 tt 4 }
+  { createBezierCusped str 1 ssx 1 ssy 1 sf 1 sb 1 }
+  { createBSpline str 1 ssx 1 ssy 1 sf 1 sb 1 }
+  { createEllipse str 1 ssx 1 ssy 1 sf 1 sb 1 }
+  { createRectangle str 1 ssx 1 ssy 1 sf 1 sb 1 }
+  { createRectangleCusped str 1 ssx 1 ssy 1 sf 1 sb 1 }
+  { brush str 1 ssx 1 ssy 1 sf 1 sb 1 }
+  { eraser src 2 str 1 ssx 1 ssy 1 sf 1 sb 1 }
+  { clone src 1 str 1 ssx 1 ssy 1 sf 1 sb 1 }
+  { reveal src 3 str 1 ssx 1 ssy 1 sf 1 sb 1 }
+  { dodge src 1 str 1 ssx 1 ssy 1 sf 1 sb 1 }
+  { burn src 1 str 1 ssx 1 ssy 1 sf 1 sb 1 }
+  { blur src 1 str 1 ssx 1 ssy 1 sf 1 sb 1 }
+  { sharpen src 1 str 1 ssx 1 ssy 1 sf 1 sb 1 }
+  { smear src 1 str 1 ssx 1 ssy 1 sf 1 sb 1 }
+} }
+toolbar_brush_hardness 0.200000003
+toolbar_source_transform_scale {1 1}
+toolbar_source_transform_center {1024 576}
+colorOverlay {0 0 0 0}
+lifetime_type "all frames"
+lifetime_start 1001
+lifetime_end 1001
+motionblur_shutter_offset_type centred
+source_black_outside true
+name Holdout_Roto_KEEP_2110
+label "【圈要的: 身体发灰处圈选补实心】"
+xpos 191
+ypos 44
+}
+push $Ne505bc00
+Group {
+inputs 3
+name Clean_Keyer_Master_2110
+selected true
+xpos 0
+ypos 142
+addUserKnob {20 KeyerTab l 核心抠像与色彩控制}
+addUserKnob {4 color_mode l "0. 素材色彩模式" M {"标准普通素材 (sRGB / 直通)" "电影机灰片 (LogC -> Linear 转正)"}}
+color_mode "电影机灰片 (LogC -> Linear 转正)"
+addUserKnob {26 divider1 l "" +STARTLINE}
+addUserKnob {18 screenColour l "1. 吸取绿幕背景 (Ctrl+点选)"}
+screenColour {0.007549729198 0.01121218968 0.03187108412}
+addUserKnob {4 insideComponent l "2. 补心遮罩模式 (InM)" M {None Alpha "Inverted Alpha" Luminance "Inverted Luminance"}}
+insideComponent Alpha
+addUserKnob {4 outsideComponent l "3. 垃圾剔除模式 (OutM)" M {None Alpha "Inverted Alpha" Luminance "Inverted Luminance"}}
+outsideComponent "Inverted Alpha"
+addUserKnob {7 inm_blur l "4. 补心边缘羽化 (InM Feather)" R 0 20}
+inm_blur 5.9
+addUserKnob {7 outm_blur l "5. 垃圾边缘羽化 (OutM Feather)" R 0 20}
+outm_blur 12
+addUserKnob {7 clipWhite l "6. 身体压实纯白度 (Clip White)" R 0.1 1}
+clipWhite 0.744
+addUserKnob {7 clipBlack l "7. 背景纯净黑度 (Clip Black)" R 0 0.3}
+clipBlack 0.2175
+}
+Input {
+inputs 0
+name Garbage_OutM
+xpos 620
+ypos -9
+number 2
+}
+Blur {
+channels alpha
+size {{parent.outm_blur}}
+name Blur2
+xpos 620
+ypos 15
+}
+Input {
+inputs 0
+name Holdout_InM
+xpos 510
+ypos -9
+number 1
+}
+Blur {
+channels alpha
+size {{parent.inm_blur}}
+name Blur1
+xpos 510
+ypos 39
+}
+Input {
+inputs 0
+name Source
+xpos 290
+ypos -9
+}
+set N54f4000 [stack 0]
+Colorspace {
+colorspace_in AlexaV3LogC
+name Internal_Colorspace
+xpos 290
+ypos 15
+}
+push $N54f4000
+Switch {
+inputs 2
+which {{parent.color_mode}}
+name Switch1
+xpos 400
+ypos 63
+}
+set N54f5000 [stack 0]
+OFXuk.co.thefoundry.keylight.keylight_v201 {
+inputs 3
+show "Final Result"
+unPreMultiply false
+screenColour {{parent.screenColour x1001 0} {parent.screenColour x1001 0} {parent.screenColour x1001 0}}
+screenGain 1
+screenBalance 0.5
+alphaBias {0.5 0.5 0.5}
+despillBias {0.5 0.5 0.5}
+gangBiases true
+preBlur 0
+"Screen Matte" 0
+screenClipMin 0
+screenClipMax 1
+screenClipRollback 0
+screenGrowShrink 0
+screenSoftness 0
+screenDespotBlack 0
+screenDespotWhite 0
+screenReplaceMethod "Soft Colour"
+screenReplaceColour {0.5 0.5 0.5}
+Tuning 0
+midPoint 0.5
+lowGain 1
+midGain 1
+highGain 1
+"Inside Mask" 0
+sourceAlphaHandling Ignore
+insideReplaceMethod "Soft Colour"
+insideReplaceColour {0.5 0.5 0.5}
+Crops 0
+SourceXMethod Colour
+SourceYMethod Colour
+SourceEdgeColour 0
+SourceCropL 0
+SourceCropR 1
+SourceCropB 0
+SourceCropT 1
+balanceSet false
+insideComponent {{parent.insideComponent}}
+outsideComponent {{parent.outsideComponent}}
+cacheBreaker true
+name Keylight1
+xpos 620
+ypos 39
+}
+push $N54f5000
+Copy {
+inputs 2
+from0 rgba.alpha
+to0 rgba.alpha
+name Copy1
+xpos 620
+ypos 63
+}
+Premult {
+name Premult1
+xpos 620
+ypos 87
+}
+Output {
+name Output1
+xpos 620
+ypos 111
+}
+end_group
+set Nb027f180 [stack 0]
+Write {
+channels rgba
+file C:/Users/zhaoliang/Documents/GitHub/VFX_Pipeline_CamSync/example/shot/wg/ep28/2110/ue/workarea/bg/bg_2110_####.png
+file_type png
+checkHashOnRead false
+name Write_Final_PNG_2110
+xpos 0
+ypos 200
+}
+push $Nb027f180
+Viewer {
+frame_range 1001-1039
+fps 25
+colour_sample_bbox {0.822265625 0.4765625 0.8232421875 0.4775390625}
+samplepoints {{0.822265625 0.4765625}
+  }
+monitorOutOutputTransform rec709
+name Viewer1
+xpos 112
+ypos 316
+}
