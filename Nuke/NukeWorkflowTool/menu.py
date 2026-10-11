@@ -1,31 +1,42 @@
 # -*- coding: utf-8 -*-
-"""
-LiangLiang Nuke Pipeline Plugin Menu
-"""
+import os
 import nuke
+import LiangLiangNukeWorkflow
 
-try:
-    import LiangLiangNukeWorkflow
-    
-    # 获取 Nuke 顶部主菜单栏
-    nuke_menu = nuke.menu("Nuke")
-    
-    # 创建一级菜单：UE镜头管线
-    pipeline_menu = nuke_menu.addMenu("UE镜头管线", icon="Movie.png")
-    
-    # 添加子功能 1：制作前实拍预处理
-    pipeline_menu.addCommand(
-        "1. 制作前: 实拍预处理与输出底板 (生成ue/workarea/bg)", 
-        "LiangLiangNukeWorkflow.show_prep_menu()", 
-        icon="Write.png"
-    )
-    
-    # 添加子功能 2：渲染后 MRQ 分层组装
-    pipeline_menu.addCommand(
-        "2. 渲染后: MRQ分层组装与ID拆层 (AutoComper)", 
-        "LiangLiangNukeWorkflow.show_autocomp_menu()", 
-        icon="Merge.png"
-    )
+# -------------------------------------------------------------------------
+# 1. 注册 icons 目录并绑定主 Logo (锁定 icon.png)
+# -------------------------------------------------------------------------
+current_dir = os.path.dirname(os.path.abspath(__file__)).replace('\\', '/')
+icons_dir = os.path.join(current_dir, "icons").replace('\\', '/')
 
-except Exception as e:
-    print(f"[CamWorkflow] Nuke 菜单加载异常: {e}")
+if os.path.exists(icons_dir):
+    nuke.pluginAddPath(icons_dir)
+
+# 寻找主图标 icon.png (支持常见格式)
+user_main_logo = None
+for ext in ['.png', '.jpg', '.jpeg', '.ico']:
+    cand = os.path.join(icons_dir, f"icon{ext}").replace('\\', '/')
+    if os.path.exists(cand):
+        user_main_logo = cand
+        break
+
+if not user_main_logo:
+    user_main_logo = os.path.join(icons_dir, "icon.png").replace('\\', '/')
+
+
+# -------------------------------------------------------------------------
+# 2. 注册工具栏与菜单 (恢复 Nuke 原生默认图标尺寸)
+# -------------------------------------------------------------------------
+toolbar = nuke.menu("Nodes").addMenu("LiangLiangVFX", icon=user_main_logo)
+
+toolbar.addCommand(
+    "实拍预处理与输出UE底板",
+    "LiangLiangNukeWorkflow.show_prep_menu()",
+    icon="Keyer.png"
+)
+
+toolbar.addCommand(
+    "UE渲染分层（单层）自动预合成与ID拆层",
+    "LiangLiangNukeWorkflow.show_autocomp_menu()",
+    icon="Merge.png"
+)

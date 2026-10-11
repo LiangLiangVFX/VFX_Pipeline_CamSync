@@ -1,17 +1,11 @@
 # -*- coding: utf-8 -*-
 """
-LiangLiang Nuke Pipeline Workflow (平铺原生直连·Raw Data 自动联动版)
+LiangLiang Nuke Pipeline Workflow (工业级极简正交布局版)
 -------------------------------------------------------------------------
-- 1. 彻底取消 Group 封装：全部节点平铺在主节点图，Keylight 参数零延迟实时生效
-- 2. ColorMode_Switch 提供下拉菜单，与 Read 节点的 raw data 原生双向联动：
-     * 默认预设：[电影机灰片 (LogC -> Linear)]，Read 的 raw data 自动打勾
-     * 切换为：[标准普通素材 (sRGB / 直通)] 时，Read 的 raw data 自动取消打勾
-- 3. Keylight 物理端口精准接入：
-     * Input 0: ColorMode_Switch (Source)
-     * Input 1: Blur_InM (Holdout 圈要的补心)
-     * Input 2: Blur_OutM (Garbage 圈不要的切除)
-     * insideComponent 与 outsideComponent 默认保持为 None，吸色无阻碍
-- 4. Write 节点的 output transform 严格精准指定为 "default (sRGB)"
+- 模块 1: 实拍预处理与输出UE底板 (直角正交连线 + Raw Data 联动 + default (sRGB))
+- 模块 2: UE渲染分层（单层）自动预合成与ID拆层:
+  * 背景主干: Read_BG -> TimeOffset(1000) -> Grade -> ColorCorrect -> Merge(Over) -> HorizonWriteNode
+  * 独立拆层: 右侧金黄框展示 "分层 AOV 与 Cryptomatte (供合成提取)"，Material 提取 Depth/Normal/Pos 及 Actor/SHD Cryptomatte
 Author: LiangLiangArtist
 Contact: liangliangvfx@gmail.com
 """
@@ -58,7 +52,7 @@ class LiangLiangNukePipeline(object):
         return ep, shot, workarea_dir, shot_root_dir
 
     def _set_safe_write_colorspace(self, write_node, preferred_spaces):
-        """严格设置 Write 节点的色彩空间，支持 default (sRGB) 与 OCIO 规范"""
+        """严格设置 Write 节点的色彩空间"""
         cs_knob = None
         for k_name in ['colorspace', 'out_colorspace', 'ocio_output']:
             if k_name in write_node.knobs():
@@ -79,7 +73,7 @@ class LiangLiangNukePipeline(object):
             pass
 
         try:
-            cs_knob.setValue("default (sRGB)")
+            cs_knob.setValue(preferred_spaces[0])
         except:
             pass
 
@@ -96,7 +90,7 @@ class LiangLiangNukePipeline(object):
             return None
 
     # =========================================================================
-    # 模块 1：实拍预处理与输出底板 (平铺原生架构 + 智能 Raw 联动)
+    # 模块 1：实拍预处理与输出UE底板 (绝对直角正交连线布局)
     # =========================================================================
     def build_plate_prep_network(self):
         ep, shot, workarea_dir, shot_root_dir = self.get_current_pipeline_context()
@@ -159,9 +153,7 @@ class LiangLiangNukePipeline(object):
         for n in nuke.allNodes():
             n.setSelected(False)
 
-        # -------------------------------------------------------------
-        # 1. 读入实拍素材 (默认勾选 raw)
-        # -------------------------------------------------------------
+        # 1. 读入实拍素材 (顶层 X: 0, Y: 0)
         read_plate = nuke.createNode("Read", inpanel=False)
         read_plate.setName(f"Read_Plate_{shot}")
         read_plate['file'].setValue(seq_pattern)
@@ -173,9 +165,7 @@ class LiangLiangNukePipeline(object):
             read_plate['raw'].setValue(True)
         read_plate.setXYpos(0, 0)
 
-        # -------------------------------------------------------------
-        # 2. 色彩转换与切换控制节点 (与 Read 节点 raw data 联动)
-        # -------------------------------------------------------------
+        # 2. 色彩转换与切换分支 (垂直与正交分布)
         col_convert = nuke.createNode("Colorspace", inpanel=False)
         col_convert.setInput(0, read_plate)
         col_convert.setName(f"Colorspace_LogC_to_Linear_{shot}")
@@ -183,35 +173,29 @@ class LiangLiangNukePipeline(object):
         valid_out = self._get_valid_colorspace_value(col_convert['colorspace_out'], ["linear", "scene_linear", "ACEScg", "Linear"])
         if valid_in: col_convert['colorspace_in'].setValue(valid_in)
         if valid_out: col_convert['colorspace_out'].setValue(valid_out)
-        col_convert.setXYpos(120, 80)
+        col_convert.setXYpos(120, 50)
 
         color_switch = nuke.createNode("Switch", inpanel=False)
         color_switch.setName(f"ColorMode_Switch_{shot}")
-        color_switch.setInput(0, read_plate)   # 0: 直通 (标准普通素材)
-        color_switch.setInput(1, col_convert)  # 1: LogC -> Linear 转正
-
-        # 添加可视化下拉菜单
+        color_switch.setInput(0, read_plate)   # 垂直直通
+        color_switch.setInput(1, col_convert)  # 灰片分支
         mode_knob = nuke.Enumeration_Knob("color_mode", "素材色彩模式", [
             "标准普通素材 (sRGB / 直通)", 
             "电影机灰片 (LogC -> Linear 转正)"
         ])
-        mode_knob.setValue(1) # 默认预设为电影灰片模式
+        mode_knob.setValue(1)
         color_switch.addKnob(mode_knob)
         color_switch['which'].setExpression("color_mode")
-        color_switch.setXYpos(0, 160)
+        color_switch.setXYpos(0, 110)
 
-        # 【核心联动绑定】：Read 的 raw data 自动跟随色彩模式切换
-        # 当 color_mode == 1 (灰片模式) 时 raw 为 True；当 color_mode == 0 (普通素材) 时 raw 为 False
         if 'raw' in read_plate.knobs():
             read_plate['raw'].setExpression(f"{color_switch.name()}.which == 1")
 
-        # -------------------------------------------------------------
-        # 3. 预留 Roto 遮罩与羽化节点
-        # -------------------------------------------------------------
+        # 3. 遮罩支路 (纵向排列，完全垂直对齐)
         holdout_roto = nuke.createNode("Roto", inpanel=False)
         holdout_roto.setInput(0, read_plate)
         holdout_roto.setName(f"Holdout_Roto_KEEP_{shot}")
-        holdout_roto['label'].setValue("【圈要的: 身体发灰处圈选补实心】")
+        holdout_roto['label'].setValue("【圈要的: 补实心】")
         holdout_roto.setXYpos(260, 0)
 
         blur_inm = nuke.createNode("Blur", inpanel=False)
@@ -224,35 +208,29 @@ class LiangLiangNukePipeline(object):
         garbage_roto = nuke.createNode("Roto", inpanel=False)
         garbage_roto.setInput(0, read_plate)
         garbage_roto.setName(f"Garbage_Roto_REMOVE_{shot}")
-        garbage_roto['label'].setValue("【圈不要的: 穿帮灯具/四周杂物圈选切除】")
-        garbage_roto.setXYpos(440, 0)
+        garbage_roto['label'].setValue("【圈不要的: 切杂物】")
+        garbage_roto.setXYpos(420, 0)
 
         blur_outm = nuke.createNode("Blur", inpanel=False)
         blur_outm.setInput(0, garbage_roto)
         blur_outm.setName(f"Blur_OutM_{shot}")
         blur_outm['channels'].setValue("alpha")
         blur_outm['size'].setValue(6.0)
-        blur_outm.setXYpos(440, 80)
+        blur_outm.setXYpos(420, 80)
 
-        # -------------------------------------------------------------
-        # 4. 原生 Keylight 节点 (直接平铺在主图，参数实时生效)
-        # -------------------------------------------------------------
+        # 4. Keylight (固定 Y = 200)
         kl = nuke.createNode("OFXuk.co.thefoundry.keylight.keylight_v201", inpanel=False)
         kl.setName(f"Keyer_Alpha_{shot}")
-        kl.setXYpos(260, 180)
+        kl.setInput(0, color_switch)  # Source
+        kl.setInput(1, blur_inm)      # InM 垂直向下直连
+        kl.setInput(2, blur_outm)     # OutM 正交连入
+        kl.setXYpos(260, 200)
 
-        # 严格物理端口连接
-        kl.setInput(0, color_switch)  # Input 0: Source
-        kl.setInput(1, blur_inm)      # Input 1: InM (Holdout)
-        kl.setInput(2, blur_outm)     # Input 2: OutM (Garbage)
-
-        # 遮罩组件默认设为 "None"，保障自由吸色绝不锁死
         if "insideComponent" in kl.knobs():
             kl["insideComponent"].setValue("None")
         if "outsideComponent" in kl.knobs():
             kl["outsideComponent"].setValue("None")
 
-        # 参数初始值与安全视图模式
         for cw in ['clipwhite', 'clipWhite', 'clip_white']:
             if cw in kl.knobs(): kl[cw].setValue(1.0); break
 
@@ -262,23 +240,20 @@ class LiangLiangNukePipeline(object):
         for sh in ['show', 'view']:
             if sh in kl.knobs(): kl[sh].setValue("Final Result"); break
 
-        # -------------------------------------------------------------
-        # 5. Copy Alpha -> Premult -> Write 输出
-        # -------------------------------------------------------------
+        # 5. Copy -> Premult -> Write (与 Keylight 保持水平 T 字对齐)
         copy_alpha = nuke.createNode("Copy", inpanel=False)
         copy_alpha.setName(f"Copy_Alpha_{shot}")
-        copy_alpha.setInput(0, color_switch) # 0: RGB
-        copy_alpha.setInput(1, kl)           # 1: Keylight Alpha
+        copy_alpha.setInput(0, color_switch)  # 垂直自上方 0, 110 直下
+        copy_alpha.setInput(1, kl)            # 水平自右侧 260, 200 直进
         copy_alpha['from0'].setValue("rgba.alpha")
         copy_alpha['to0'].setValue("rgba.alpha")
-        copy_alpha.setXYpos(0, 260)
+        copy_alpha.setXYpos(0, 200)
 
         premult = nuke.createNode("Premult", inpanel=False)
         premult.setName(f"Premult_{shot}")
         premult.setInput(0, copy_alpha)
-        premult.setXYpos(0, 330)
+        premult.setXYpos(0, 300)  # 垂直落位于 Y = 300，与模块二 Merge 保持水平对齐
 
-        # Write 节点输出 PNG (严格锁定 default (sRGB))
         png_out_pattern = f"{target_bg_dir}/bg_{shot}_####.png"
         write_ue = nuke.createNode("Write", inpanel=False)
         write_ue.setInput(0, premult)
@@ -288,29 +263,76 @@ class LiangLiangNukePipeline(object):
         write_ue['file_type'].setValue("png")
         write_ue['datatype'].setValue("8 bit")
         self._set_safe_write_colorspace(write_ue, ["default (sRGB)", "Output - sRGB", "sRGB", "default"])
-        write_ue.setXYpos(0, 410)
+        write_ue.setXYpos(0, 400)
 
-        # 背景框清晰整理
+        # 墨绿框规整包裹
         bd = nuke.createNode("BackdropNode", inpanel=False)
-        bd['label'].setValue(f"<center><b>Shot {shot} 抠像底板生成 (平铺直观·原生高响应版)</b></center>")
-        bd['note_font_size'].setValue(16)
+        bd['label'].setValue(f"<center><b><font size='4'>Shot {shot} 实拍预处理与输出UE底板</font></b></center>")
+        bd['note_font_size'].setValue(14)
         bd['tile_color'].setValue(0x1a402500)
-        bd.setXYpos(-40, -50)
-        bd['bdwidth'].setValue(640)
-        bd['bdheight'].setValue(520)
+        bd.setXYpos(-60, -60)
+        bd['bdwidth'].setValue(580)
+        bd['bdheight'].setValue(540)
 
         nuke.scriptSave()
 
-        # 视口连在 Keyer_Alpha 上，方便直接吸取背景色
         viewer = nuke.activeViewer()
         if viewer:
             viewer.node().setInput(0, kl)
 
         nuke.show(kl)
-        nuke.message("【节点网络已平铺生成】\n\n👉 操作指南:\n1. 节点完全直观平铺：双击 Keyer_Alpha 可直接调节 Clip White/Black，拖动实时响应；\n2. 色彩联动：双击 ColorMode_Switch 切换模式，Read 节点的 Raw Data 会自动联动开/关；\n3. 遮罩应用：画好 Roto 后，在 Keyer_Alpha 中将 insideComponent 设为 Alpha (补心)，outsideComponent 设为 Inverted Alpha (切杂物)；\n4. Write 输出已锁定为 [default (sRGB)]，随时可点 Render 输出！")
+        nuke.message("【实拍预处理与输出UE底板已生成】\n\n👉 连线已彻底规整:\n• Copy 与 Keylight 在 Y=200 保持水平正交对接；\n• 输出节点与 Premult 保持垂直对齐！")
 
     # =========================================================================
-    # 模块 2：UE 渲染后 —— MRQ 分层组装、拆层与预合成
+    # 模块 2 辅助函数：创建带缩略图的 AOV 提取节点
+    # =========================================================================
+    def _create_single_aov_shuffle(self, target_node, layer_name, node_name, xpos, ypos):
+        try:
+            nuke.tcl(f"add_layer {{{layer_name} {layer_name}.red {layer_name}.green {layer_name}.blue {layer_name}.alpha}}")
+        except:
+            pass
+
+        shuf = nuke.createNode("Shuffle", inpanel=False)
+        shuf.setInput(0, target_node)
+        shuf.setName(node_name)
+        if 'in' in shuf.knobs():
+            shuf['in'].setValue(layer_name)
+        elif 'in1' in shuf.knobs():
+            shuf['in1'].setValue(layer_name)
+
+        if 'postage_stamp' in shuf.knobs():
+            shuf['postage_stamp'].setValue(True)
+
+        shuf.setXYpos(xpos, ypos)
+        return shuf
+
+    def _create_cryptomatte_node(self, target_node, node_name, xpos, ypos):
+        try:
+            crypto = nuke.createNode("Cryptomatte", inpanel=False)
+        except:
+            crypto = nuke.createNode("NoOp", inpanel=False)
+            crypto['label'].setValue("Cryptomatte")
+        crypto.setInput(0, target_node)
+        crypto.setName(node_name)
+        crypto.setXYpos(xpos, ypos)
+        return crypto
+
+    def _find_matching_layer(self, node, keyword):
+        try:
+            channels = node.channels()
+            layers = list(set([c.split('.')[0] for c in channels]))
+            for lyr in layers:
+                if f"World{keyword.capitalize()}" in lyr:
+                    return lyr
+            for lyr in layers:
+                if keyword.lower() in lyr.lower():
+                    return lyr
+        except:
+            pass
+        return f"FinalImageMovieRenderQueue_World{keyword.capitalize()}"
+
+    # =========================================================================
+    # 模块 2：UE 渲染分层（单层）自动预合成与 ID 拆层
     # =========================================================================
     def build_render_autocomp_network(self):
         ep, shot, workarea_dir, shot_root_dir = self.get_current_pipeline_context()
@@ -324,10 +346,17 @@ class LiangLiangNukePipeline(object):
                 default_render_dir = cand_render
 
         if not default_render_dir or not os.path.exists(default_render_dir):
-            chosen = nuke.getFilename("选择 UE 渲染输出的 render 文件夹", "", type="dir")
+            chosen = nuke.getFilename("选择 UE 渲染输出的 render 文件夹 (或序列任选一张图片)", "", type="dir")
             if not chosen:
                 return
             default_render_dir = os.path.normpath(chosen).replace('\\', '/')
+
+        if os.path.isfile(default_render_dir):
+            default_render_dir = os.path.dirname(default_render_dir).replace('\\', '/')
+
+        if not os.path.isdir(default_render_dir):
+            nuke.message(f"所选路径不是有效文件夹！\n{default_render_dir}")
+            return
 
         all_files = os.listdir(default_render_dir)
         exr_files = [f for f in all_files if f.lower().endswith(".exr")]
@@ -337,133 +366,226 @@ class LiangLiangNukePipeline(object):
 
         sequences = {}
         for f in exr_files:
-            m = re.search(r'^(.*?)[._](\d+)\.exr$', f, re.IGNORECASE)
+            m = re.search(r'^(.*?)([._])(\d+)\.exr$', f, re.IGNORECASE)
             if m:
                 prefix = m.group(1)
-                frame = int(m.group(2))
+                sep = m.group(2)
+                digits = m.group(3)
+                frame = int(digits)
+                pad = len(digits)
                 if prefix not in sequences:
-                    sequences[prefix] = []
-                sequences[prefix].append(frame)
+                    sequences[prefix] = {
+                        "frames": [],
+                        "sep": sep,
+                        "pad": pad
+                    }
+                sequences[prefix]["frames"].append(frame)
+
+        if not sequences:
+            nuke.message("未解析到符合命名规则的 EXR 序列文件！\n" + default_render_dir)
+            return
 
         for n in nuke.allNodes():
             n.setSelected(False)
 
-        start_x = 700
-        start_y = 0
-        spacing_x = 180
+        bg_seq = None
+        actor_seq = None
+        material_seq = None
 
-        created_reads = {}
-        light_reads = []
-        id_reads = {}
-
-        idx = 0
-        for prefix, frames in sorted(sequences.items()):
-            frames.sort()
-            first_f = frames[0]
-            last_f = frames[-1]
-            seq_path = f"{default_render_dir}/{prefix}.%04d.exr"
-
-            r = nuke.createNode("Read", inpanel=False)
-            r.setName(re.sub(r'[^a-zA-Z0-9_]', '_', prefix))
-            r['file'].setValue(seq_path)
-            r['first'].setValue(first_f)
-            r['last'].setValue(last_f)
-            r['origfirst'].setValue(first_f)
-            r['origlast'].setValue(last_f)
-            r.setXYpos(start_x + idx * spacing_x, start_y)
-            created_reads[prefix] = r
-
+        for prefix, data in sequences.items():
             p_lower = prefix.lower()
-            if "id" in p_lower or "cryptomatte" in p_lower:
-                id_reads[prefix] = r
+            if "actor" in p_lower:
+                actor_seq = (prefix, data)
+            elif any(k in p_lower for k in ["material", "shd"]):
+                material_seq = (prefix, data)
             else:
-                light_reads.append(r)
-            idx += 1
+                if not bg_seq:
+                    bg_seq = (prefix, data)
 
-        aov_offset_y = 160
-        for prefix, id_node in id_reads.items():
-            x = id_node.xpos()
-            y = id_node.ypos() + aov_offset_y
-            aov_list = [
-                ("WorldDepth", "finalImageMovieRenderQueue_WorldDepth"),
-                ("WorldPos", "finalImageMovieRenderQueue_WorldPos"),
-                ("WorldNormal", "finalImageMovieRenderQueue_WorldNormal")
-            ]
-            shuf_x_offset = 0
-            for label_name, ch_name in aov_list:
-                shuf = nuke.createNode("Shuffle2", inpanel=False)
-                shuf.setInput(0, id_node)
-                shuf.setName(f"{id_node.name()}_{label_name}")
-                shuf.setXYpos(x + shuf_x_offset, y + 80)
-                shuf_x_offset += 90
+        # -------------------------------------------------------------
+        # 1. 中区背景主合成干线 (垂直自 X: 800, Y: 0 直下)
+        # -------------------------------------------------------------
+        comp_x = 800
+        comp_tail = None
 
-        cur_ue_pipe = None
-        if light_reads:
-            merge_y = start_y + 350
-            for i, l_node in enumerate(light_reads):
-                if i == 0:
-                    cur_ue_pipe = l_node
-                else:
-                    m_plus = nuke.createNode("Merge2", inpanel=False)
-                    m_plus['operation'].setValue("plus")
-                    m_plus['output'].setValue("rgb")
-                    m_plus.setInput(0, cur_ue_pipe)
-                    m_plus.setInput(1, l_node)
-                    m_plus.setXYpos(l_node.xpos(), merge_y)
-                    cur_ue_pipe = m_plus
+        if bg_seq:
+            p, d = bg_seq
+            frames = sorted(d["frames"])
+            seq_path = f"{default_render_dir}/{p}{d['sep']}%0{d['pad']}d.exr"
 
-        bg_png_dir = os.path.join(workarea_dir, "bg").replace('\\', '/')
-        png_pattern = f"{bg_png_dir}/bg_{shot}_%04d.png"
-        
-        read_rendered_png = nuke.createNode("Read", inpanel=False)
-        read_rendered_png.setName(f"Read_Exported_PNG_{shot}")
-        read_rendered_png['file'].setValue(png_pattern)
-        read_rendered_png['first'].setValue(int(nuke.root()['first_frame'].value()))
-        read_rendered_png['last'].setValue(int(nuke.root()['last_frame'].value()))
-        read_rendered_png['origfirst'].setValue(int(nuke.root()['first_frame'].value()))
-        read_rendered_png['origlast'].setValue(int(nuke.root()['last_frame'].value()))
-        read_rendered_png.setXYpos(start_x - 200, start_y + 260)
+            r_bg = nuke.createNode("Read", inpanel=False)
+            r_bg.setName(f"Read_UE_BG_{shot}")
+            r_bg['file'].setValue(seq_path)
+            r_bg['first'].setValue(frames[0]); r_bg['last'].setValue(frames[-1])
+            r_bg['origfirst'].setValue(frames[0]); r_bg['origlast'].setValue(frames[-1])
+            r_bg.setXYpos(comp_x, 0)
 
-        final_fg_node = read_rendered_png
+            t_offset = nuke.createNode("TimeOffset", inpanel=False)
+            t_offset.setInput(0, r_bg)
+            t_offset.setName(f"TimeOffset_{shot}")
+            t_offset['time_offset'].setValue(1000)
+            t_offset.setXYpos(comp_x, 75)
 
-        final_comp_pipe = cur_ue_pipe
-        if cur_ue_pipe and final_fg_node:
-            merge_over = nuke.createNode("Merge2", inpanel=False)
-            merge_over['operation'].setValue("over")
-            merge_over.setInput(0, cur_ue_pipe)
-            merge_over.setName(f"Merge_Comp_{shot}")
-            merge_over.setXYpos(cur_ue_pipe.xpos(), start_y + 480)
-            final_comp_pipe = merge_over
+            grade_node = nuke.createNode("Grade", inpanel=False)
+            grade_node.setInput(0, t_offset)
+            grade_node.setName(f"Grade_BG_{shot}")
+            grade_node.setXYpos(comp_x, 150)
 
-        if final_comp_pipe:
+            cc_node = nuke.createNode("ColorCorrect", inpanel=False)
+            cc_node.setInput(0, grade_node)
+            cc_node.setName(f"ColorCorrect_BG_{shot}")
+            cc_node.setXYpos(comp_x, 225)
+
+            comp_tail = cc_node
+
+        # -------------------------------------------------------------
+        # 2. 与实拍底板水平正交连接 (从 Premult Y=300 平直到达 Merge Y=300)
+        # -------------------------------------------------------------
+        fg_pipe = None
+        for n in nuke.allNodes("Premult"):
+            if f"Premult_{shot}" in n.name():
+                fg_pipe = n
+                break
+
+        if not fg_pipe:
+            bg_png_dir = os.path.join(workarea_dir, "bg").replace('\\', '/')
+            png_pattern = f"{bg_png_dir}/bg_{shot}_%04d.png"
+            read_fg = nuke.createNode("Read", inpanel=False)
+            read_fg.setName(f"Read_Exported_PNG_{shot}")
+            read_fg['file'].setValue(png_pattern)
+            read_fg['first'].setValue(int(nuke.root()['first_frame'].value()))
+            read_fg['last'].setValue(int(nuke.root()['last_frame'].value()))
+            read_fg['origfirst'].setValue(int(nuke.root()['first_frame'].value()))
+            read_fg['origlast'].setValue(int(nuke.root()['last_frame'].value()))
+            read_fg.setXYpos(640, 300)
+            fg_pipe = read_fg
+
+        final_merge = None
+        if comp_tail and fg_pipe:
+            final_merge = nuke.createNode("Merge2", inpanel=False)
+            final_merge['operation'].setValue("over")
+            final_merge.setInput(0, comp_tail)  # B: UE 背景 (垂直从上方来)
+            final_merge.setInput(1, fg_pipe)    # A: 实拍底板 (水平从左侧平直接入)
+            final_merge.setName(f"Merge_Comp_Over_{shot}")
+            final_merge.setXYpos(comp_x, 300)
+        else:
+            final_merge = comp_tail if comp_tail else fg_pipe
+
+        # 3. 输出审阅节点 HorizonWriteNode
+        if final_merge:
             preview_dir = os.path.normpath(os.path.join(default_render_dir, "..", "preview")).replace('\\', '/')
             if not os.path.exists(preview_dir):
-                try:
-                    os.makedirs(preview_dir)
-                except:
-                    pass
+                try: os.makedirs(preview_dir)
+                except: pass
 
             nk_base = os.path.splitext(os.path.basename(nuke.root().name()))[0]
             mov_out_path = f"{preview_dir}/{nk_base}.mov"
-            
-            final_write = nuke.createNode("Write", inpanel=False)
-            final_write.setInput(0, final_comp_pipe)
-            final_write.setName("Write_Preview_MOV")
-            final_write['file'].setValue(mov_out_path)
-            final_write['file_type'].setValue("mov")
-            self._set_safe_write_colorspace(final_write, ["default (rec709)", "Output - Rec.709", "rec709", "default"])
-            
-            if 'meta_codec' in final_write.knobs():
-                try:
-                    final_write['meta_codec'].setValue("apch")
-                except:
-                    pass
 
-            final_write.setXYpos(final_comp_pipe.xpos(), final_comp_pipe.ypos() + 100)
+            h_write = nuke.createNode("Write", inpanel=False)
+            h_write.setInput(0, final_merge)
+            h_write.setName("HorizonWriteNode")
+            h_write['file'].setValue(mov_out_path)
+            h_write['file_type'].setValue("mov")
+            self._set_safe_write_colorspace(h_write, ["rec709", "Output - Rec.709", "default (rec709)", "default"])
+
+            for k in [
+                ("mov64_format", "mov (QuickTime / MOV)"),
+                ("mov64_codec", "appr"),
+                ("mov_prores_codec_profile", "ProRes 4:2:2 HQ 10-bit")
+            ]:
+                if k[0] in h_write.knobs():
+                    try: h_write[k[0]].setValue(k[1])
+                    except: pass
+
+            tab_horizon = nuke.Tab_Knob("horizon", "Horizon Studio Beta")
+            h_write.addKnob(tab_horizon)
+            fmt_preset = nuke.Enumeration_Knob("format_preset", "Format Preset", [
+                "mov_444", "exr_raw", "exr_aces", "jpg_709", "mov_709", "mov_aces", "ngr_proxy", "ngr_fullres"
+            ])
+            fmt_preset.setValue("mov_709")
+            h_write.addKnob(fmt_preset)
+
+            h_write.setXYpos(comp_x, 400)
+
+        bd_mid = nuke.createNode("BackdropNode", inpanel=False)
+        bd_mid['label'].setValue(f"<center><b><font size='4'>Shot {shot} UE 预合成主干区</font></b><br>UE 背景调色与实拍叠加</center>")
+        bd_mid['note_font_size'].setValue(14)
+        bd_mid['tile_color'].setValue(0x1b2d4400)
+        bd_mid.setXYpos(680, -60)
+        bd_mid['bdwidth'].setValue(380)
+        bd_mid['bdheight'].setValue(540)
+
+        # -------------------------------------------------------------
+        # 4. 右区 AOV 与 Cryptomatte 提取区 (精确按图片设定提示)
+        # -------------------------------------------------------------
+        id_start_x = 1180
+
+        # Actor ID
+        if actor_seq:
+            p, d = actor_seq
+            frames = sorted(d["frames"])
+            seq_path = f"{default_render_dir}/{p}{d['sep']}%0{d['pad']}d.exr"
+
+            r_actor = nuke.createNode("Read", inpanel=False)
+            r_actor.setName(f"Read_Actor_ID_{shot}")
+            r_actor['file'].setValue(seq_path)
+            r_actor['first'].setValue(frames[0]); r_actor['last'].setValue(frames[-1])
+            r_actor['origfirst'].setValue(frames[0]); r_actor['origlast'].setValue(frames[-1])
+            r_actor.setXYpos(id_start_x, 0)
+
+            self._create_cryptomatte_node(r_actor, f"Cryptomatte_Actor_{shot}", id_start_x, 160)
+
+        # Material ID
+        mat_x = 1580
+        if material_seq:
+            p, d = material_seq
+            frames = sorted(d["frames"])
+            seq_path = f"{default_render_dir}/{p}{d['sep']}%0{d['pad']}d.exr"
+
+            r_mat = nuke.createNode("Read", inpanel=False)
+            r_mat.setName(f"Read_Material_ID_{shot}")
+            r_mat['file'].setValue(seq_path)
+            r_mat['first'].setValue(frames[0]); r_mat['last'].setValue(frames[-1])
+            r_mat['origfirst'].setValue(frames[0]); r_mat['origlast'].setValue(frames[-1])
+            r_mat.setXYpos(mat_x, 0)
+
+            depth_layer = self._find_matching_layer(r_mat, "depth")
+            normal_layer = self._find_matching_layer(r_mat, "normal")
+            pos_layer = self._find_matching_layer(r_mat, "pos")
+
+            self._create_single_aov_shuffle(
+                r_mat, depth_layer, "FinalImageMovieRenderQueue_WorldDepth_Shuffel", mat_x - 180, 160
+            )
+            self._create_single_aov_shuffle(
+                r_mat, normal_layer, "FinalImageMovieRenderQueue_WorldNormal_Shuffel", mat_x - 60, 160
+            )
+            self._create_single_aov_shuffle(
+                r_mat, pos_layer, "FinalImageMovieRenderQueue_WorldPos_Shuffel", mat_x + 60, 160
+            )
+            self._create_cryptomatte_node(
+                r_mat, f"Cryptomatte_Material_{shot}", mat_x + 180, 160
+            )
+
+        # 精确按图片设定提示: "分层 AOV 与 Cryptomatte (供合成提取)"
+        bd_right = nuke.createNode("BackdropNode", inpanel=False)
+        bd_right['label'].setValue("<center><b><font size='5' color='#ffcc00'>分层 AOV 与 Cryptomatte (供合成提取)</font></b><br>ID / Material (WorldDepth, WorldPos, WorldNormal)</center>")
+        bd_right['note_font_size'].setValue(14)
+        bd_right['tile_color'].setValue(0x55440000)
+        bd_right.setXYpos(1120, -60)
+        bd_right['bdwidth'].setValue(740)
+        bd_right['bdheight'].setValue(320)
 
         nuke.scriptSave()
-        nuke.message(f"【MRQ 渲染自动预合成组装完成】\n\n• 已自动读取输出好的透明 PNG: [Read_Exported_PNG_{shot}]\n• 纯原生连接，下游零插件依赖！")
 
+        viewer = nuke.activeViewer()
+        if viewer and final_merge:
+            viewer.node().setInput(0, final_merge)
+
+        nuke.message(f"【预合成组装完成】\n\n👉 优化点:\n1. 实拍底板与 UE 背景保持直角正交连线；\n2. 右侧 ID 拆层区标签已更新为「分层 AOV 与 Cryptomatte (供合成提取)」！")
+
+# =========================================================================
+# 菜单统一接口 (仅保留核心的两项功能)
+# =========================================================================
 def show_prep_menu():
     pipe = LiangLiangNukePipeline()
     pipe.build_plate_prep_network()
