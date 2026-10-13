@@ -2,14 +2,16 @@
 """
 LiangLiang Nuke Pipeline Workflow (工业级极简正交布局版·单多层智能合一)
 -------------------------------------------------------------------------
-- 模块 1: 实拍预处理与输出UE底板 (直角正交连线 + Raw Data 联动 + default (sRGB))
+- 模块 1: 实拍预处理与输出UE底板:
+  * 锁定 default (sRGB) 输出
+  * 渲染后自动弹出输出目录 (并附带面板一键打开按钮)
+  * 防重复点击检测与自动清理重构
 - 模块 2: UE渲染分层自动预合成与ID拆层:
-  * 单层流 (背景 + Actor ID + Material ID 共3层):
-    - 中区主干: Read_UE_BG -> TimeOffset(1000) -> Grade -> ColorCorrect -> Merge(Over) -> HorizonWriteNode
-    - 右区拆层: 包含 Read_Actor_ID 与 Read_Material_ID (拆出 Depth/Normal/Pos 与两个 Cryptomatte)
-  * 多层流 (包含 env/key/fill/fog 等灯光分层):
-    - 中区主干: 独立灯光分层 Grade 链式 Plus 加法拼合，Fog 专属挂载 Keyer(Luma Key)
-    - 右区拆层: 同样提取 Actor ID 与 Material ID 完整通道
+  * 自动检索并优先加载 ue/publish 下的最新渲染版本 (v001 -> v002 -> v003)
+  * 单层流 (背景 + Actor ID + Material ID 完整 3 层): 自动装配主干与 AOV/Crypto 提取
+  * 多层流 (含 env/key/fill/fog 等): 独立 Grade 链式 Plus 加法拼合，Fog 专属挂载 Keyer
+  * 防重复点击检测与自动清理重构
+- 水印标记: 右下角自动附带 [模版由脚本自动生成 v1.0.0]
 Author: LiangLiangArtist
 Contact: liangliangvfx@gmail.com
 """
@@ -55,8 +57,45 @@ class LiangLiangNukePipeline(object):
 
         return ep, shot, workarea_dir, shot_root_dir
 
+    def _setup_project_root_settings(self, first_frame=None, last_frame=None):
+        """严格统一工程设置: 2048*1152, 25fps, 对齐帧范围"""
+        fmt_name = "2048x1152_Film"
+        target_fmt_str = "2048 1152 1.0 2048x1152_Film"
+        try:
+            nuke.addFormat(target_fmt_str)
+        except:
+            pass
+
+        root = nuke.root()
+        try:
+            root['format'].setValue(fmt_name)
+        except:
+            try:
+                root['format'].setValue("2048 1152")
+            except:
+                pass
+
+        root['fps'].setValue(25.0)
+
+        if first_frame is not None and last_frame is not None:
+            root['first_frame'].setValue(int(first_frame))
+            root['last_frame'].setValue(int(last_frame))
+
+    def _create_watermark_note(self, xpos, ypos):
+        """在右下角生成专属水印签名节点"""
+        for n in nuke.allNodes("StickyNote"):
+            if "Pipeline_Watermark" in n.name():
+                nuke.delete(n)
+
+        note = nuke.createNode("StickyNote", inpanel=False)
+        note.setName("Pipeline_Watermark")
+        note['label'].setValue("<font color='#888888' size='3'><b>模版由脚本自动生成 v1.0.0</b></font>")
+        note['note_font_size'].setValue(11)
+        note.setXYpos(xpos, ypos)
+        return note
+
     def _set_safe_write_colorspace(self, write_node, preferred_spaces):
-        """严格设置 Write 节点的色彩空间"""
+        """严格设置 Write 节点的色彩空间，优先匹配 default (sRGB)"""
         cs_knob = None
         for k_name in ['colorspace', 'out_colorspace', 'ocio_output']:
             if k_name in write_node.knobs():
@@ -70,7 +109,12 @@ class LiangLiangNukePipeline(object):
             available = cs_knob.values()
             for pref in preferred_spaces:
                 for avail in available:
-                    if pref.lower() == avail.lower() or pref.lower() in avail.lower():
+                    if pref.lower() == avail.lower():
+                        cs_knob.setValue(avail)
+                        return
+            for pref in preferred_spaces:
+                for avail in available:
+                    if pref.lower() in avail.lower():
                         cs_knob.setValue(avail)
                         return
         except:
@@ -82,7 +126,6 @@ class LiangLiangNukePipeline(object):
             pass
 
     def _get_valid_colorspace_value(self, knob, preferred_candidates):
-        """严格从 Nuke 节点当前支持的色彩列表里抓取有效参数名"""
         try:
             available_values = knob.values()
             for cand in preferred_candidates:
@@ -94,12 +137,60 @@ class LiangLiangNukePipeline(object):
             return None
 
     # =========================================================================
+    # 防重复与旧节点清理逻辑
+    # =========================================================================
+    def _cleanup_module1_nodes(self):
+        m1_names = [
+            "Read_Plate", "Colorspace_LogC_to_Linear", "ColorMode_Switch",
+            "Holdout_Roto_KEEP", "Blur_InM", "Garbage_Roto_REMOVE", "Blur_OutM",
+            "Keyer_Alpha", "Copy_Alpha", "Premult_Plate", "Write_Final_PNG"
+        ]
+        for name in m1_names:
+            n = nuke.toNode(name)
+            if n: nuke.delete(n)
+        for bd in nuke.allNodes("BackdropNode"):
+            lbl = bd['label'].value()
+            if "实拍预处理" in lbl or "模块一" in lbl:
+                nuke.delete(bd)
+
+    def _cleanup_module2_nodes(self):
+        m2_fixed = [
+            "Read_UE_BG", "TimeOffset_UE_BG", "Grade_UE_BG", "ColorCorrect_UE_BG",
+            "Merge_Comp_Over", "HorizonWriteNode", "Read_Actor_ID", "TimeOffset_Actor_ID",
+            "Cryptomatte_Actor", "Read_Material_ID", "TimeOffset_Material_ID", "Dot_Material_ID",
+            "FinalImageMovieRenderQueue_WorldDepth_Shuffel",
+            "FinalImageMovieRenderQueue_WorldNormal_Shuffel",
+            "FinalImageMovieRenderQueue_WorldPos_Shuffel",
+            "Cryptomatte_Material"
+        ]
+        for name in m2_fixed:
+            n = nuke.toNode(name)
+            if n: nuke.delete(n)
+
+        # 扫描并清理右侧中区在 X >= 650 范围内的多层加法树动态节点
+        for n in nuke.allNodes():
+            if any(n.name().startswith(p) for p in ["Merge_Plus_", "Merge_Screen_", "Keyer_Fog_", "Grade_", "TimeOffset_", "Read_"]):
+                if n.xpos() >= 650:
+                    nuke.delete(n)
+
+        for bd in nuke.allNodes("BackdropNode"):
+            lbl = bd['label'].value()
+            if any(kw in lbl for kw in ["UE 预合成主干区", "分层 AOV 与 Cryptomatte"]):
+                nuke.delete(bd)
+
+    # =========================================================================
     # 模块 1：实拍预处理与输出UE底板
     # =========================================================================
     def build_plate_prep_network(self):
         ep, shot, workarea_dir, shot_root_dir = self.get_current_pipeline_context()
         if not workarea_dir:
             return
+
+        # 防重复检测
+        if nuke.toNode("Read_Plate") or nuke.toNode("Write_Final_PNG"):
+            if not nuke.ask("⚠️ 检测到当前工程中已存在「实拍预处理与输出UE底板」节点！\n\n是否清除旧节点并重新构建？\n(点击 Yes 将自动清理旧节点重新生成，点击 No 取消操作)"):
+                return
+            self._cleanup_module1_nodes()
 
         filter_exts = "*.exr *.dpx *.tif *.tiff *.png *.jpg *.jpeg *.mov *.mp4 *.mxf"
         chosen_file = nuke.getFilename(f"【选择 Shot {shot} 实拍原始素材 (序列任选一张或视频文件)】", filter_exts)
@@ -145,18 +236,16 @@ class LiangLiangNukePipeline(object):
 
         target_bg_dir = os.path.join(workarea_dir, "bg").replace('\\', '/')
         if not os.path.exists(target_bg_dir):
-            try:
-                os.makedirs(target_bg_dir)
-            except:
-                pass
+            try: os.makedirs(target_bg_dir)
+            except: pass
 
-        nuke.root()['first_frame'].setValue(first_f)
-        nuke.root()['last_frame'].setValue(last_f)
-        nuke.root()['fps'].setValue(25.0)
+        # 锁定工程全局规格 (2048x1152, 25fps, 对应帧范围)
+        self._setup_project_root_settings(first_frame=first_f, last_frame=last_f)
 
         for n in nuke.allNodes():
             n.setSelected(False)
 
+        # 1. 读入实拍素材
         read_plate = nuke.createNode("Read", inpanel=False)
         read_plate.setName("Read_Plate")
         read_plate['file'].setValue(seq_pattern)
@@ -168,6 +257,7 @@ class LiangLiangNukePipeline(object):
             read_plate['raw'].setValue(True)
         read_plate.setXYpos(0, 0)
 
+        # 2. 色彩转换与切换分支
         col_convert = nuke.createNode("Colorspace", inpanel=False)
         col_convert.setInput(0, read_plate)
         col_convert.setName("Colorspace_LogC_to_Linear")
@@ -193,6 +283,7 @@ class LiangLiangNukePipeline(object):
         if 'raw' in read_plate.knobs():
             read_plate['raw'].setExpression(f"{color_switch.name()}.which == 1")
 
+        # 3. 遮罩支路
         holdout_roto = nuke.createNode("Roto", inpanel=False)
         holdout_roto.setInput(0, read_plate)
         holdout_roto.setName("Holdout_Roto_KEEP")
@@ -219,6 +310,7 @@ class LiangLiangNukePipeline(object):
         blur_outm['size'].setValue(6.0)
         blur_outm.setXYpos(420, 80)
 
+        # 4. Keylight
         kl = nuke.createNode("OFXuk.co.thefoundry.keylight.keylight_v201", inpanel=False)
         kl.setName("Keyer_Alpha")
         kl.setInput(0, color_switch)
@@ -240,6 +332,7 @@ class LiangLiangNukePipeline(object):
         for sh in ['show', 'view']:
             if sh in kl.knobs(): kl[sh].setValue("Final Result"); break
 
+        # 5. Copy -> Premult -> Write
         copy_alpha = nuke.createNode("Copy", inpanel=False)
         copy_alpha.setName("Copy_Alpha")
         copy_alpha.setInput(0, color_switch)
@@ -261,9 +354,26 @@ class LiangLiangNukePipeline(object):
         write_ue['channels'].setValue("rgba")
         write_ue['file_type'].setValue("png")
         write_ue['datatype'].setValue("8 bit")
-        self._set_safe_write_colorspace(write_ue, ["default (sRGB)", "Output - sRGB", "sRGB", "default"])
+
+        # 严格锁定为 default (sRGB)
+        self._set_safe_write_colorspace(write_ue, ["default (sRGB)", "default", "sRGB", "Output - sRGB"])
+
+        # 核心功能：添加渲染后自动打开文件夹的回调脚本，并附带一键打开按钮
+        open_script = (
+            "import os, subprocess;\n"
+            "f_path = nuke.thisNode()['file'].evaluate();\n"
+            "d_path = os.path.dirname(f_path);\n"
+            "if os.path.exists(d_path):\n"
+            "    os.startfile(d_path) if os.name == 'nt' else subprocess.Popen(['open', d_path])"
+        )
+        write_ue['afterRender'].setValue(open_script)
+
+        btn_open = nuke.PyScript_Knob("btn_open_bg_dir", "  📂 打开输出文件夹  ", open_script)
+        write_ue.addKnob(btn_open)
+
         write_ue.setXYpos(0, 400)
 
+        # 墨绿框规整包裹
         bd = nuke.createNode("BackdropNode", inpanel=False)
         bd['label'].setValue(f"<center><b><font size='4'>Shot {shot} 实拍预处理与输出UE底板</font></b></center>")
         bd['note_font_size'].setValue(14)
@@ -271,6 +381,9 @@ class LiangLiangNukePipeline(object):
         bd.setXYpos(-60, -60)
         bd['bdwidth'].setValue(580)
         bd['bdheight'].setValue(540)
+
+        # 右下角自动附带水印标签
+        self._create_watermark_note(xpos=340, ypos=480)
 
         nuke.scriptSave()
 
@@ -281,17 +394,18 @@ class LiangLiangNukePipeline(object):
         nuke.show(kl)
         nuke.message(
             f"【✅ 实拍预处理节点已构建完成】\n\n"
-            f"📦 已生成节点清单:\n"
-            f"• [Read_Plate]: 原始素材输入 (帧范围 {first_f} - {last_f}，默认 Raw Data 开启)\n"
-            f"• [ColorMode_Switch]: 色彩双向联动切换器 (支持 sRGB 直通 与 LogC 转 Linear)\n"
-            f"• [Keyer_Alpha]: Keylight 原生实时抠像核心 (直连端口已配置)\n"
-            f"• [Holdout_Roto] & [Garbage_Roto]: 身体补心与穿帮修整遮罩支路\n"
-            f"• [Premult_Plate] & [Write_Final_PNG]: 锁定 default (sRGB) 透明底板输出\n\n"
+            f"⚙️ 工程设置已校准锁定:\n"
+            f"• 画面尺寸: 2048 × 1152 (1.0)\n"
+            f"• 帧率设置: 25 fps\n"
+            f"• 帧数范围: {first_f} - {last_f} 帧\n\n"
+            f"📦 节点特性确认:\n"
+            f"• [Write_Final_PNG]: 色彩空间已锁定为 default (sRGB)\n"
+            f"• [自动弹窗]: 渲染完成后会自动打开输出文件夹 (面板亦有快捷按钮)\n"
+            f"• [安全防护]: 已集成重复创建检测，再次点击可自动安全重构\n\n"
             f"👉 下一步操作指南:\n"
-            f"1. 双击 ColorMode_Switch: 根据素材是灰片还是普通实拍选择色彩模式 (Read 节点的 Raw 自动联动)；\n"
-            f"2. 双击 Keyer_Alpha: 在视口吸取背景绿/蓝幕颜色，微调 Screen Matte 控制白黑切值；\n"
-            f"3. 遮罩修饰: 若身体发虚用 Holdout_Roto 画遮罩补实心；四周有灯具穿帮用 Garbage_Roto 画遮罩切除；\n"
-            f"4. 输出底板: 确认无误后选中 Write_Final_PNG 节点，点击面板中的「Render」输出透明 PNG 底板！"
+            f"1. 双击 ColorMode_Switch 确认素材色彩模式；\n"
+            f"2. 双击 Keyer_Alpha 吸取背景色，微调 Screen Matte 控制白黑切值；\n"
+            f"3. 画好 Roto 遮罩补心或切除杂物后，选中 Write_Final_PNG 点击「Render」输出透明 PNG 底板！"
         )
 
     # =========================================================================
@@ -371,8 +485,8 @@ class LiangLiangNukePipeline(object):
         return re.sub(r'[^a-zA-Z0-9_]', '_', n)
 
     def _build_right_id_network(self, default_render_dir, actor_seq, material_seq, shot, id_start_x=1260):
-        """构建右侧独立 AOV 与 Cryptomatte 提取区 (必须确保同时提取 Actor ID 与 Material ID)"""
-        # A. Actor ID (挂 TimeOffset(1000) 与 Cryptomatte)
+        """构建右侧独立 AOV 与 Cryptomatte 提取区 (严格确保 Actor ID 与 Material ID 完整 2 组)"""
+        # A. Actor ID
         if actor_seq:
             p, d = actor_seq
             frames = sorted(d["frames"])
@@ -393,7 +507,7 @@ class LiangLiangNukePipeline(object):
 
             self._create_cryptomatte_node(t_actor, "Cryptomatte_Actor", id_start_x, 160)
 
-        # B. Material ID (挂 TimeOffset(1000)、Dot 分流并拆出 Depth/Normal/Pos 与 Cryptomatte)
+        # B. Material ID
         mat_x = id_start_x + 360
         if material_seq:
             p, d = material_seq
@@ -444,19 +558,42 @@ class LiangLiangNukePipeline(object):
         bd_right['bdheight'].setValue(340)
 
     # =========================================================================
-    # 模块 2：UE 渲染分层自动预合成与 ID 拆层 (单层/多层智能合一)
+    # 模块 2：UE 渲染分层自动预合成与 ID 拆层 (支持版本自动迭代追踪)
     # =========================================================================
     def build_unified_autocomp_network(self):
         ep, shot, workarea_dir, shot_root_dir = self.get_current_pipeline_context()
         if not workarea_dir:
             return
 
-        default_render_dir = ""
-        if shot_root_dir:
-            cand_render = os.path.normpath(os.path.join(shot_root_dir, "ue", "publish", "v001", "render")).replace('\\', '/')
-            if os.path.exists(cand_render):
-                default_render_dir = cand_render
+        # 防重复检测
+        if nuke.toNode("HorizonWriteNode") or nuke.toNode("Read_UE_BG"):
+            if not nuke.ask("⚠️ 检测到当前工程中已存在「UE渲染分层预合成」节点！\n\n是否清除旧节点并重新构建？\n(点击 Yes 将自动清理旧节点重新生成，点击 No 取消操作)"):
+                return
+            self._cleanup_module2_nodes()
 
+        # ---------------------------------------------------------------------
+        # 大厂级专业方案：自动扫描并锁定最新版本 (Latest Version Detection)
+        # ---------------------------------------------------------------------
+        default_render_dir = ""
+        detected_version = "最新版"
+        if shot_root_dir:
+            publish_dir = os.path.normpath(os.path.join(shot_root_dir, "ue", "publish")).replace('\\', '/')
+            if os.path.exists(publish_dir):
+                # 扫描所有版本目录 (v001, v002, v003 ...)
+                v_dirs = [
+                    d for d in os.listdir(publish_dir)
+                    if re.match(r'^v\d+$', d, re.IGNORECASE) and os.path.isdir(os.path.join(publish_dir, d))
+                ]
+                if v_dirs:
+                    # 自然数值排序，取最大版本
+                    v_dirs.sort(key=lambda x: int(re.search(r'\d+', x).group(0)))
+                    latest_v = v_dirs[-1]
+                    test_render = os.path.normpath(os.path.join(publish_dir, latest_v, "render")).replace('\\', '/')
+                    if os.path.exists(test_render):
+                        default_render_dir = test_render
+                        detected_version = latest_v
+
+        # 如果未自动检测到，弹出窗口供用户确认或指定目录
         if not default_render_dir or not os.path.exists(default_render_dir):
             chosen = nuke.getFilename("选择 UE 渲染输出的 render 文件夹 (或序列任选一张图片)", "", type="dir")
             if not chosen:
@@ -475,17 +612,19 @@ class LiangLiangNukePipeline(object):
             nuke.message("render 目录下未找到任何 EXR 序列文件！\n" + default_render_dir)
             return
 
+        # 确保全局格式与帧率维持 2048*1152 与 25fps
+        self._setup_project_root_settings()
+
         for n in nuke.allNodes():
             n.setSelected(False)
 
         # ---------------------------------------------------------------------
-        # 1. 深度智能分类：精准剥离 Actor ID 与 Material ID (兼容各类命名)
+        # 深度分类：精准提取 Actor ID 与 Material ID
         # ---------------------------------------------------------------------
         actor_seq = None
         material_seq = None
         unclassified = {}
 
-        # 第一次扫描：特征词匹配
         for prefix, data in sequences.items():
             p_lower = prefix.lower()
             if any(k in p_lower for k in ["material", "shd"]) or re.search(r'(^|[._])mat([._]|$)', p_lower):
@@ -495,7 +634,6 @@ class LiangLiangNukePipeline(object):
             else:
                 unclassified[prefix] = data
 
-        # 第二次扫描：通用 ID 补充
         content_layers = {}
         for prefix, data in unclassified.items():
             p_lower = prefix.lower()
@@ -509,10 +647,9 @@ class LiangLiangNukePipeline(object):
             else:
                 content_layers[prefix] = data
 
-        # 第三次兜底（当目录共 3 个序列且缺少 Material 时，将非背景序列智能判定为 Material）
+        # 兜底：3个序列缺少 Material 时，将非背景序列识别为 Material
         if len(sequences) == 3 and actor_seq and not material_seq and len(content_layers) == 2:
             sorted_items = sorted(content_layers.items(), key=lambda x: len(x[0]))
-            # 较长或含特征的作为 Material，较短纯镜头名为背景
             material_seq = sorted_items[1]
             content_layers = {sorted_items[0][0]: sorted_items[0][1]}
 
@@ -520,9 +657,7 @@ class LiangLiangNukePipeline(object):
             nuke.message("未在目录中检测到任何镜头渲染画面或灯光分层！")
             return
 
-        # ---------------------------------------------------------------------
-        # 2. 单层 vs 多层 智能研判
-        # ---------------------------------------------------------------------
+        # 单层 vs 多层 判定
         light_keywords = ['env', 'key', 'fill', 'sky', 'fog', 'heightfog', 'easyfog', 'emi', 'emission', 'lgt']
         is_multi = False
 
@@ -643,8 +778,11 @@ class LiangLiangNukePipeline(object):
             bd_mid['bdwidth'].setValue(420)
             bd_mid['bdheight'].setValue(over_y + 220)
 
-            # 4. 构建右侧 AOV (严格确保同时生成 Actor ID 与 Material ID)
+            # 4. 构建右侧 AOV (包含 Actor ID 与 Material ID 完整 2 组)
             self._build_right_id_network(default_render_dir, actor_seq, material_seq, shot, id_start_x=1260)
+
+            # 右下角自动附带水印标签
+            self._create_watermark_note(xpos=1760, ypos=310)
 
             nuke.scriptSave()
             viewer = nuke.activeViewer()
@@ -653,6 +791,7 @@ class LiangLiangNukePipeline(object):
 
             nuke.message(
                 f"【✅ 单层预合成网络构建完成】\n\n"
+                f"🏷️ 自动版本判定: 已加载 [{detected_version}] 版本序列\n"
                 f"📦 已加载分层清单 (包含镜头背景与完整拆层):\n"
                 f"• [Read_UE_BG]: 镜头背景层已载入 ({prefix})\n"
                 f"• [Read_Actor_ID]: Actor ID 层已载入并在右区展开 Cryptomatte\n"
@@ -661,8 +800,8 @@ class LiangLiangNukePipeline(object):
                 f"• [Merge_Comp_Over]: 实拍透明底板与 UE 背景压合 (Over 叠加)\n"
                 f"• [HorizonWriteNode]: 标准审阅输出 (Apple ProRes 422 HQ / rec709)\n\n"
                 f"👉 下一步操作指南:\n"
-                f"1. 双击 Grade_UE_BG 或 ColorCorrect_UE_BG 调节环境色温色调，与实拍人物自然融合；\n"
-                f"2. 局部材质提取: 从右侧金色框的 Material 节点及 AOV (WorldDepth/Normal/Pos) 提取通道做景深/位置调色；\n"
+                f"1. 双击 Grade_UE_BG 或 ColorCorrect_UE_BG 调节环境色温色调；\n"
+                f"2. 局部精修: 从右侧金色框的 Material 节点及 AOV 提取通道做景深/位置调色；\n"
                 f"3. 局部选区提取: 从右侧金色框的 Cryptomatte 提取人物或具体材质选区；\n"
                 f"4. 成片输出: 确认效果无误后，双击 HorizonWriteNode 节点，点击「Render」输出成片 MOV！"
             )
@@ -864,6 +1003,9 @@ class LiangLiangNukePipeline(object):
             # 4. 构建右侧 AOV
             self._build_right_id_network(default_render_dir, actor_seq, material_seq, shot, id_start_x=1260)
 
+            # 右下角自动附带水印标签
+            self._create_watermark_note(xpos=1760, ypos=310)
+
             nuke.scriptSave()
             viewer = nuke.activeViewer()
             if viewer and final_merge:
@@ -872,6 +1014,7 @@ class LiangLiangNukePipeline(object):
             lights_str = "、".join(created_light_names)
             nuke.message(
                 f"【✅ 多层渲染分层预合成装配完成】\n\n"
+                f"🏷️ 自动版本判定: 已加载 [{detected_version}] 版本序列\n"
                 f"📦 已加载分层清单 (共 {len(created_light_names)} 个通道):\n"
                 f"• 灯光通道: {lights_str}\n"
                 f"• [全层 TimeOffset]: 每个分层均已挂载 TimeOffset(1000)，解决 0001 起始帧偏移\n"
