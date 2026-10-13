@@ -13,7 +13,6 @@ define_window_layout_xml {<?xml version="1.0" encoding="UTF-8"?>
                 <split size="569"/>
                 <dock id="" activePageId="Viewer.1">
                     <page id="Viewer.1"/>
-                    <page id="uk.co.thefoundry.scripteditor.1"/>
                 </dock>
                 <split size="400"/>
                 <dock id="" activePageId="DAG.1">
@@ -37,9 +36,9 @@ Root {
  name C:/Users/Administrator/Documents/Github/VFX_Pipeline_CamSync/example/shot/wg/ep28/2110/ue/workarea/wanguzuiqiangzong_wgzqz_ep28_2110_ue_zl_v001.nk
  frame 1012
  first_frame 1001
- last_frame 1021
+ last_frame 1039
  fps 25
- format "2048 1152 0 0 2048 1152 1 "
+ format "2048 1152 0 0 2048 1152 1 2048x1152_Film"
  proxy_type scale
  proxy_format "1024 778 0 0 1024 778 1 1K_Super_35(full-ap)"
  colorManagement Nuke
@@ -70,8 +69,8 @@ BackdropNode {
  note_font_size 14
  xpos 700
  ypos -60
- bdwidth 420
- bdheight 520
+ bdwidth 460
+ bdheight 1040
 }
 BackdropNode {
  inputs 0
@@ -79,7 +78,6 @@ BackdropNode {
  tile_color 0x55440000
  label "<center><b><font size='5' color='#ffcc00'>分层 AOV 与 Cryptomatte (供合成提取)</font></b><br>ID / Material (WorldDepth, WorldPos, WorldNormal)</center>"
  note_font_size 14
- selected true
  xpos 1200
  ypos -60
  bdwidth 740
@@ -88,16 +86,16 @@ BackdropNode {
 Read {
  inputs 0
  file_type jpeg
- file C:/Users/Administrator/Desktop/Green/2180/proxy-jpg/wanguzuiqiangzong_wgzqz_ep28_shot2180_v006.%04d.jpg
+ file C:/Users/Administrator/Desktop/Green/2110/proxy-jpg/wanguzuiqiangzong_wgzqz_ep28_shot2110_v004.%04d.jpg
  first 1001
- last 1021
+ last 1039
  origfirst 1001
- origlast 1021
- raw {{"ColorMode_Switch_2110.which == 1"}}
- name Read_Plate_2110
+ origlast 1039
+ raw {{"ColorMode_Switch.which == 1"}}
+ name Read_Plate
  xpos 0
 }
-set Nd6670000 [stack 0]
+set Ncf01c000 [stack 0]
 Roto {
  output alpha
  curves {{{v x3f99999a}
@@ -125,19 +123,18 @@ Roto {
   { smear src 1 str 1 ssx 1 ssy 1 sf 1 sb 1 }
 } }
  toolbar_source_transform_center {1024 576}
- name Garbage_Roto_REMOVE_2110
+ name Garbage_Roto_REMOVE
  label "【圈不要的: 切杂物】"
  xpos 420
- ypos 17
 }
 Blur {
  channels alpha
  size 6
- name Blur_OutM_2110
+ name Blur_OutM
  xpos 420
  ypos 80
 }
-push $Nd6670000
+push $Ncf01c000
 Roto {
  output alpha
  curves {{{v x3f99999a}
@@ -165,44 +162,43 @@ Roto {
   { smear src 1 str 1 ssx 1 ssy 1 sf 1 sb 1 }
 } }
  toolbar_source_transform_center {1024 576}
- name Holdout_Roto_KEEP_2110
+ name Holdout_Roto_KEEP
  label "【圈要的: 补实心】"
  xpos 260
- ypos 19
 }
 Blur {
  channels alpha
  size 4
- name Blur_InM_2110
+ name Blur_InM
  xpos 260
  ypos 80
 }
-push $Nd6670000
+push $Ncf01c000
 Colorspace {
  colorspace_in AlexaV3LogC
- name Colorspace_LogC_to_Linear_2110
- xpos 126
- ypos 67
+ name Colorspace_LogC_to_Linear
+ xpos 120
+ ypos 50
 }
-push $Nd6670000
+push $Ncf01c000
 Switch {
  inputs 2
  which {{color_mode}}
- name ColorMode_Switch_2110
+ name ColorMode_Switch
  xpos 0
  ypos 110
  addUserKnob {20 User}
  addUserKnob {4 color_mode l 素材色彩模式 M {"标准普通素材 (sRGB / 直通)" "电影机灰片 (LogC -> Linear 转正)"}}
  color_mode "电影机灰片 (LogC -> Linear 转正)"
 }
-set Nd6671800 [stack 0]
+set Ncf01c800 [stack 0]
 OFXuk.co.thefoundry.keylight.keylight_v201 {
  inputs 3
  show "Final Result"
  unPreMultiply false
- screenColour {0.009741506539 0.01197939645 0.027586326}
+ screenColour {0 0 0}
  screenGain 1
- screenBalance 0.95
+ screenBalance 0.5
  alphaBias {0.5 0.5 0.5}
  despillBias {0.5 0.5 0.5}
  gangBiases true
@@ -238,41 +234,13 @@ OFXuk.co.thefoundry.keylight.keylight_v201 {
  insideComponent None
  outsideComponent None
  cacheBreaker true
- name Keyer_Alpha_2110
+ name Keyer_Alpha
  xpos 260
- ypos 206
-}
-push $Nd6671800
-Copy {
- inputs 2
- from0 rgba.alpha
- to0 rgba.alpha
- name Copy_Alpha_2110
- xpos 0
  ypos 200
 }
-Premult {
- name Premult_2110
- xpos 0
- ypos 300
-}
-set Naeea400 [stack 0]
-Write {
- channels rgba
- file C:/Users/Administrator/Documents/Github/VFX_Pipeline_CamSync/example/shot/wg/ep28/2110/ue/workarea/bg/bg_2110_####.png
- colorspace sRGB
- file_type png
- checkHashOnRead false
- in_colorspace scene_linear
- out_colorspace scene_linear
- name Write_Final_PNG_2110
- xpos 0
- ypos 400
-}
+set Ncf01dc00 [stack 0]
 Viewer {
- inputs 0
- frame 1012
- frame_range 1001-1021
+ frame_range 1001-1039
  fps 25
  colour_sample_bbox {0.84375 0.4609375 0.8447265625 0.4619140625}
  samplepoints {{0.84375 0.4609375}
@@ -282,41 +250,161 @@ Viewer {
  xpos 260
  ypos 757
 }
-push $Naeea400
+push $Ncf01dc00
+push $Ncf01c800
+Copy {
+ inputs 2
+ from0 rgba.alpha
+ to0 rgba.alpha
+ name Copy_Alpha
+ xpos 0
+ ypos 200
+}
+Premult {
+ name Premult_Plate
+ xpos 0
+ ypos 300
+}
+set Nced82400 [stack 0]
+Write {
+ channels rgba
+ file C:/Users/Administrator/Documents/Github/VFX_Pipeline_CamSync/example/shot/wg/ep28/2110/ue/workarea/bg/bg_2110_####.png
+ file_type png
+ checkHashOnRead false
+ afterRender "import os, subprocess;\nf_path = nuke.thisNode()\['file'].evaluate();\nd_path = os.path.dirname(f_path);\nif os.path.exists(d_path):\n    os.startfile(d_path) if os.name == 'nt' else subprocess.Popen(\['open', d_path])"
+ name Write_Final_PNG
+ xpos 0
+ ypos 400
+ addUserKnob {20 User}
+ addUserKnob {22 btn_open_bg_dir l "  📂 打开输出文件夹  " -STARTLINE T "import os, subprocess;\nf_path = nuke.thisNode()\['file'].evaluate();\nd_path = os.path.dirname(f_path);\nif os.path.exists(d_path):\n    os.startfile(d_path) if os.name == 'nt' else subprocess.Popen(\['open', d_path])"}
+}
+push $Nced82400
 Read {
  inputs 0
  file_type exr
- file C:/Users/Administrator/Desktop/Green/v001/render/ep28_cam2180.%04d.exr
+ file C:/Users/Administrator/Desktop/Green/v001/ep28_cam2180_fog.%04d.exr
  last 22
  origlast 22
- name Read_UE_BG
+ name Read_cam2180_fog
+ xpos 1000
+ ypos 480
+}
+TimeOffset {
+ time_offset 1000
+ time ""
+ name TimeOffset_cam2180_fog
+ xpos 1000
+ ypos 540
+}
+Keyer {
+ operation "luminance key"
+ range {0.012 0.33 1 1}
+ name Keyer_Fog_Alpha
+ xpos 1000
+ ypos 600
+}
+Grade {
+ name Grade_cam2180_fog
+ xpos 1000
+ ypos 660
+}
+Read {
+ inputs 0
+ file_type exr
+ file C:/Users/Administrator/Desktop/Green/v001/ep28_cam2180_key.%04d.exr
+ last 22
+ origlast 22
+ name Read_cam2180_key
+ xpos 1000
+ ypos 320
+}
+TimeOffset {
+ time_offset 1000
+ time ""
+ name TimeOffset_cam2180_key
+ xpos 1000
+ ypos 380
+}
+Grade {
+ name Grade_cam2180_key
+ xpos 1000
+ ypos 440
+}
+Read {
+ inputs 0
+ file_type exr
+ file C:/Users/Administrator/Desktop/Green/v001/ep28_cam2180_env.%04d.exr
+ last 22
+ origlast 22
+ name Read_cam2180_env
+ xpos 1000
+ ypos 160
+}
+TimeOffset {
+ time_offset 1000
+ time ""
+ name TimeOffset_cam2180_env
+ xpos 1000
+ ypos 220
+}
+Grade {
+ name Grade_cam2180_env
+ xpos 1000
+ ypos 280
+}
+Read {
+ inputs 0
+ file_type exr
+ file C:/Users/Administrator/Desktop/Green/v001/ep28_cam2180_sky.%04d.exr
+ last 22
+ origlast 22
+ name Read_cam2180_sky
  xpos 750
 }
 TimeOffset {
  time_offset 1000
  time ""
- name TimeOffset_UE_BG
+ name TimeOffset_cam2180_sky
  xpos 750
- ypos 75
+ ypos 60
 }
 Grade {
- name Grade_UE_BG
+ name Grade_cam2180_sky
  xpos 750
- ypos 150
+ ypos 120
 }
-ColorCorrect {
- name ColorCorrect_UE_BG
+Merge2 {
+ inputs 2
+ operation plus
+ output rgb
+ name Merge_Plus_cam2180_env
  xpos 750
- ypos 225
+ ypos 280
+}
+Merge2 {
+ inputs 2
+ operation plus
+ output rgb
+ name Merge_Plus_cam2180_key
+ xpos 750
+ ypos 440
+}
+Merge2 {
+ inputs 2
+ operation screen
+ output rgb
+ name Merge_Screen_cam2180_fog
+ xpos 750
+ ypos 660
 }
 Merge2 {
  inputs 2
  name Merge_Comp_Over
  xpos 750
- ypos 300
+ ypos 820
 }
 Write {
- file C:/Users/Administrator/Desktop/Green/v001/preview/wanguzuiqiangzong_wgzqz_ep28_2110_ue_zl_v001.mov
+ file C:/Users/Administrator/Desktop/Green/preview/wanguzuiqiangzong_wgzqz_ep28_2110_ue_zl_v001.mov
  colorspace rec709
  file_type mov
  mov64_format "mov (QuickTime / MOV)"
@@ -337,7 +425,7 @@ Write {
  out_colorspace scene_linear
  name HorizonWriteNode
  xpos 750
- ypos 390
+ ypos 910
  addUserKnob {20 horizon l "Horizon Studio Beta"}
  addUserKnob {4 format_preset l "Format Preset" M {mov_444 exr_raw exr_aces jpg_709 mov_709 mov_aces ngr_proxy ngr_fullres}}
  format_preset mov_709
@@ -345,22 +433,63 @@ Write {
 Read {
  inputs 0
  file_type exr
- file C:/Users/Administrator/Desktop/Green/v001/render/ep28_cam2180_actor.%04d.exr
+ file C:/Users/Administrator/Desktop/Green/v001/ep28_cam2180_material.%04d.exr
  last 22
  origlast 22
- name Read_Actor_ID
- xpos 1260
+ name Read_Material_ID
+ xpos 1620
 }
 TimeOffset {
  time_offset 1000
  time ""
- name TimeOffset_Actor_ID
- xpos 1260
+ name TimeOffset_Material_ID
+ xpos 1620
  ypos 60
 }
+Dot {
+ name Dot_Material_ID
+ xpos 1654
+ ypos 120
+}
+set Ndcb07400 [stack 0]
+add_layer {FinalImageMovieRenderQueue_WorldDepth FinalImageMovieRenderQueue_WorldDepth.red FinalImageMovieRenderQueue_WorldDepth.green FinalImageMovieRenderQueue_WorldDepth.blue FinalImageMovieRenderQueue_WorldDepth.alpha}
+Shuffle {
+ in FinalImageMovieRenderQueue_WorldDepth
+ name FinalImageMovieRenderQueue_WorldDepth_Shuffel
+ xpos 1440
+ ypos 180
+ postage_stamp true
+}
+push $Ndcb07400
+add_layer {FinalImageMovieRenderQueue_WorldNormal FinalImageMovieRenderQueue_WorldNormal.red FinalImageMovieRenderQueue_WorldNormal.green FinalImageMovieRenderQueue_WorldNormal.blue FinalImageMovieRenderQueue_WorldNormal.alpha}
+Shuffle {
+ in FinalImageMovieRenderQueue_WorldNormal
+ name FinalImageMovieRenderQueue_WorldNormal_Shuffel
+ xpos 1560
+ ypos 180
+ postage_stamp true
+}
+push $Ndcb07400
+add_layer {FinalImageMovieRenderQueue_WorldPos FinalImageMovieRenderQueue_WorldPos.red FinalImageMovieRenderQueue_WorldPos.green FinalImageMovieRenderQueue_WorldPos.blue FinalImageMovieRenderQueue_WorldPos.alpha}
+Shuffle {
+ in FinalImageMovieRenderQueue_WorldPos
+ name FinalImageMovieRenderQueue_WorldPos_Shuffel
+ xpos 1680
+ ypos 180
+ postage_stamp true
+}
+push $Ndcb07400
 Cryptomatte {
  pickerAdd {0 0 0 0 0 0 0 0}
- name Cryptomatte_Actor
- xpos 1260
- ypos 160
+ name Cryptomatte_Material
+ xpos 1800
+ ypos 180
+}
+StickyNote {
+ inputs 0
+ name Pipeline_Watermark
+ label "<font color='#888888' size='3'><b>模版由脚本自动生成 v1.0.0</b></font>"
+ selected true
+ xpos 1760
+ ypos 310
 }
