@@ -35,6 +35,17 @@ except Exception as e:
     print(f"[LiangLiangVFX] 初始导入 LiangLiangNukeWorkflow 失败: {e}")
 
 
+def _get_builtin_icon(candidates, fallback="Roto.png"):
+    """在 Nuke 插件路径中自动校验并返回真实存在的内置图标，确保 100% 显示不留空"""
+    plugin_paths = nuke.pluginPath()
+    for icon_name in candidates:
+        for p in plugin_paths:
+            full_p = os.path.join(p, icon_name)
+            if os.path.exists(full_p):
+                return icon_name
+    return fallback
+
+
 # =============================================================================
 # 热重载核心函数 (一键同时刷新 LiangLiangNukeWorkflow.py + 左侧栏 + 顶部菜单栏)
 # =============================================================================
@@ -49,7 +60,6 @@ def reload_liangliang_pipeline():
 
     menu_file = os.path.abspath(__file__)
     try:
-        # 清空左侧工具栏与顶部主菜单栏的旧条目，防止重复叠加
         nodes_m = nuke.menu("Nodes").findItem("LiangLiangVFX")
         if nodes_m and hasattr(nodes_m, "clearMenu"):
             nodes_m.clearMenu()
@@ -67,20 +77,23 @@ def reload_liangliang_pipeline():
 
 
 # =============================================================================
-# 统一菜单项注册函数 (同时绑定到 左侧 Nodes 栏 与 顶部 Nuke 主菜单栏)
+# 统一菜单项注册函数 (已隐藏备用 RVM，仅展示三大主力 AI 引擎)
 # =============================================================================
 def _populate_ll_menu(menu_obj):
+    biref_icon = _get_builtin_icon(["RotoPaint.png", "FilterErode.png", "Keyer.png"], "Roto.png")
+    sam2mat_icon = _get_builtin_icon(["Cryptomatte.png", "CameraTracker.png", "SmartVector.png", "Primatte.png"], "Tracker.png")
+
     # 功能 1: 实拍预处理 (Keyer 图标)
     menu_obj.addCommand(
         "实拍预处理与输出UE底板",
         "LiangLiangNukeWorkflow.show_prep_menu()",
         icon="Keyer.png"
     )
-    # 功能 2: [AI] RVM 全自动发丝级抠像 (Roto 图标)
+    # 功能 2: [AI] BiRefNet 全自动高清万物抠像 (RotoPaint 图标)
     menu_obj.addCommand(
-        "[AI] RVM 全自动发丝级抠像",
-        "LiangLiangNukeWorkflow.show_ai_rvm_menu()",
-        icon="Roto.png"
+        "[AI] BiRefNet 全自动高清万物抠像 (2K发丝与道具)",
+        "LiangLiangNukeWorkflow.show_ai_birefnet_menu()",
+        icon=biref_icon
     )
     # 功能 3: [AI] MatAnyone 2 发丝级目标锁定抠像 (Tracker 图标)
     menu_obj.addCommand(
@@ -88,19 +101,26 @@ def _populate_ll_menu(menu_obj):
         "LiangLiangNukeWorkflow.show_ai_sam2_menu()",
         icon="Tracker.png"
     )
-    # 功能 4: UE渲染分层自动预合成与 ID 拆层 (Shuffle 图标)
+    # 功能 4: [AI] SAM2Matting 万物发丝级跟踪抠像 (Cryptomatte/CameraTracker 图标)
+    menu_obj.addCommand(
+        "[AI] SAM2Matting 万物发丝级跟踪抠像 (ECCV 2026)",
+        "LiangLiangNukeWorkflow.show_ai_sam2matting_menu()",
+        icon=sam2mat_icon
+    )
+    # 功能 5: UE渲染分层自动预合成与 ID 拆层 (Shuffle 图标)
     menu_obj.addCommand(
         "UE渲染分层自动预合成与ID拆层",
         "LiangLiangNukeWorkflow.show_autocomp_menu()",
         icon="Shuffle.png"
     )
-    # 功能 5: 重新载入管线脚本 (Refresh 图标)
+    # 功能 6: 重新载入管线脚本 (Refresh 图标)
     menu_obj.addSeparator()
     menu_obj.addCommand(
         "重新载入管线脚本",
         "reload_liangliang_pipeline()",
         icon="Refresh.png"
     )
+
 
 # 1. 注册到左侧节点工具栏 (Nodes)
 toolbar = nuke.menu("Nodes").addMenu("LiangLiangVFX", icon=user_main_logo)

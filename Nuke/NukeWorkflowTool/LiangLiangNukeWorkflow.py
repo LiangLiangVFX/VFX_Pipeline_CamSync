@@ -1,10 +1,10 @@
 # -*- coding: utf-8 -*-
 """
-LiangLiang Nuke Pipeline Workflow (工业级极简正交布局版·横向四模块对齐 + RVM/MatAnyone2双AI引擎)
+LiangLiang Nuke Pipeline Workflow (工业级极简正交布局版·横向四模块对齐 + 四大AI引擎并存)
 -------------------------------------------------------------------------
 模块从左至右顺序：
 1. 实拍预处理与输出UE底板 (X: -60 ~ 580)
-2. 【AI 抠像与修补模块】MatAnyone 2 (CVPR 2026) 发丝级 (X: 680 ~ 1240)
+2. 【AI 抠像与修补模块】MatAnyone 2 / SAM2Matting / BiRefNet 发丝级 (X: 680 ~ 1240)
 3. UE 预合成主干区 [单层/多层自适应] (X: 1340 ~ 1960)
 4. 分层 AOV 与 Cryptomatte (供合成提取) (X: 2060 ~ 2980)
 -------------------------------------------------------------------------
@@ -886,7 +886,7 @@ class LiangLiangNukePipeline(object):
 
 
 # =========================================================================
-# AI 双引擎调度核心 (模块 2 位于左二 X: 680 ~ 1240，正交无重叠)
+# AI 多引擎调度核心 (模块 2 位于左二 X: 680 ~ 1240，正交无重叠)
 # =========================================================================
 class AIMattingDispatcher(object):
     def __init__(self):
@@ -895,13 +895,13 @@ class AIMattingDispatcher(object):
     def _locate_suite_root(self):
         # 1. 优先读取环境变量 LL_AI_SUITE_ROOT (由 AI_VFX_Pipeline_Suite 一键注册脚本写入)
         env_root = os.environ.get("LL_AI_SUITE_ROOT", "")
-        
+
         # 2. 自动探测当前脚本所在仓库 (VFX_Pipeline_CamSync) 隔壁的同级目录
         curr_script_dir = os.path.dirname(os.path.abspath(__file__)).replace('\\', '/')
         sibling_root = os.path.abspath(os.path.join(curr_script_dir, "../../../AI_VFX_Pipeline_Suite")).replace('\\', '/')
-        
+
         user_github_dir = os.path.expanduser("~/Documents/GitHub/AI_VFX_Pipeline_Suite").replace('\\', '/')
-        
+
         cand_roots = [
             env_root,
             sibling_root,
@@ -981,9 +981,9 @@ class AIMattingDispatcher(object):
         return None, None, None
 
     # =========================================================================
-    # 模块 2 (左二 X: 680 ~ 1240)：【AI 抠像与修补模块】MatAnyone 2 (CVPR 2026) 发丝级
+    # 模块 2 (左二 X: 680 ~ 1240)：【AI 抠像与修补模块】发丝级
     # =========================================================================
-    def _import_matanyone2_nodes(self, roto_dir, prefix_str):
+    def _import_matanyone2_nodes(self, roto_dir, prefix_str, engine_title="MatAnyone 2 (CVPR 2026)"):
         """
         在「实拍预处理」右侧 (X: 680 ~ 1240) 构建纯净无 Roto 硬边的 AI 发丝级抠像模块：
         - 去掉 Roto 节点，保留 Read -> Shuffle -> Grade -> FilterErode -> Blur 柔边微调链
@@ -995,7 +995,7 @@ class AIMattingDispatcher(object):
             alpha_pat, a_first, a_last = self._detect_sequence_pattern(roto_dir, prefix_filter="matanyone2_alpha_", ext=".png")
 
         if not alpha_pat:
-            nuke.message(f"在目录中未找到 MatAnyone 2 Alpha 序列：\n{roto_dir}")
+            nuke.message(f"在目录中未找到 {engine_title} Alpha 序列：\n{roto_dir}")
             return False
 
         for n in nuke.allNodes():
@@ -1035,9 +1035,9 @@ class AIMattingDispatcher(object):
         branch_x = 1000  # 模块 2 右侧 A 端 Alpha 精修列 X 坐标
 
         # =====================================================================
-        # 3. 构建 A 端：MatAnyone 2 Alpha 读取 + 纯净柔边修饰链 (无生硬 Roto 节点)
+        # 3. 构建 A 端：AI Alpha 读取 + 纯净柔边修饰链 (无生硬 Roto 节点)
         # =====================================================================
-        # (1) 读取 MatAnyone 2 Alpha 序列
+        # (1) 读取 AI Alpha 序列
         ra = nuke.createNode("Read", inpanel=False)
         ra.setName("Read_MatAnyone2_Alpha")
         ra['file'].setValue(alpha_pat)
@@ -1045,7 +1045,7 @@ class AIMattingDispatcher(object):
         ra['origfirst'].setValue(a_first); ra['origlast'].setValue(a_last)
         if 'raw' in ra.knobs():
             ra['raw'].setValue(True)
-        ra['label'].setValue("MatAnyone 2 发丝Alpha")
+        ra['label'].setValue(f"{engine_title} 发丝Alpha")
         ra.setXYpos(branch_x, 0)
 
         # (2) Shuffle：将单通道灰度图 (Red) 转为标准 Alpha 通道
@@ -1102,7 +1102,7 @@ class AIMattingDispatcher(object):
         cp.setInput(1, blur_edge)   # A 端：连入精修后的 AI Alpha
         cp['from0'].setValue("rgba.alpha")
         cp['to0'].setValue("rgba.alpha")
-        cp['label'].setValue("拷入 MatAnyone 2 Alpha")
+        cp['label'].setValue(f"拷入 {engine_title} Alpha")
         cp.setXYpos(base_x, 314)
 
         pm = nuke.createNode("Premult", inpanel=False)
@@ -1117,7 +1117,7 @@ class AIMattingDispatcher(object):
         bd = nuke.createNode("BackdropNode", inpanel=False)
         bd.setName("Backdrop_MatAnyone2")
         bd['label'].setValue(
-            "<center><b><font size='4' color='#58a6ff'>【AI 抠像与修补模块】MatAnyone 2 (CVPR 2026) 发丝级</font></b></center>\n"
+            f"<center><b><font size='4' color='#58a6ff'>【AI 抠像与修补模块】{engine_title} 发丝级</font></b></center>\n"
             "• <b>B 端主干</b>：承接左侧 [Copy_Alpha]（保留素材色彩空间判断）\n"
             "• <b>A 端精修</b>：Grade (提亮发丝) -> FilterErode (正数缩边/负数扩边) -> Blur (柔化)，不调即原样直通"
         )
@@ -1161,7 +1161,7 @@ class AIMattingDispatcher(object):
 
         comp_status = "已自动连入右侧 [Merge_Comp_Over] 前景端，且 [HorizonWriteNode] 已挂载 [Viewer1]" if merge_comp else "已将 [Write_Final_PNG] 与 [Viewer1] 挂载至 [Premult_MatAnyone2] 下"
         nuke.message(
-            f"【✅ MatAnyone 2 发丝级抠像模块已就绪！】\n\n"
+            f"【✅ {engine_title} 发丝级抠像模块已就绪！】\n\n"
             f"• 模块位置：排布于「实拍预处理」右侧，四大模块从左到右整齐对齐\n"
             f"• 节点链路：Read -> Shuffle -> Grade -> FilterErode -> Blur -> Copy -> Premult\n"
             f"• 合成联动：{comp_status}"
@@ -1169,15 +1169,22 @@ class AIMattingDispatcher(object):
         return True
 
     def _run_with_live_console(self, window_title, cmd_list, isolated_env, work_cwd, out_dir, on_success_cb):
-        """弹出实时进度终端窗口执行 AI 任务"""
+        """
+        弹出实时进度终端窗口执行 AI 任务：
+        自动清洗 window_title 中的 '|', '&', '(', ')' 等批处理敏感字符，彻底杜绝 DOS 管道符语法报错！
+        """
         os.makedirs(out_dir, exist_ok=True)
         runner_bat = os.path.join(out_dir, "_run_ai_progress.bat")
         cmd_str = subprocess.list2cmdline(cmd_list)
 
+        # 【关键修复】将窗口标题中的 '|', '(', ')' 等特殊符号替换为安全字符，防止被 cmd.exe 当成管道命令导致闪退
+        safe_title = re.sub(r'[|&<>^()]', ' ', str(window_title))
+        safe_title = re.sub(r'\s+', ' ', safe_title).strip()
+
         bat_content = (
             "@echo off\n"
             "chcp 65001 >nul\n"
-            f"title {window_title}\n"
+            f"title {safe_title}\n"
             f"cd /d \"{work_cwd}\"\n"
             f"{cmd_str}\n"
             "if errorlevel 1 (\n"
@@ -1211,7 +1218,7 @@ class AIMattingDispatcher(object):
             else:
                 nuke.executeInMainThread(
                     nuke.message,
-                    args=(f"{window_title} 运行未完成或发生中断，请检查进度窗口提示。",)
+                    args=(f"{safe_title} 运行未完成或发生中断，请检查进度窗口提示。",)
                 )
 
         th = threading.Thread(target=_worker, name="AI_Console_Thread")
@@ -1219,7 +1226,7 @@ class AIMattingDispatcher(object):
         th.start()
 
     # =========================================================================
-    # 引擎 1: RVM 全自动快速抠像
+    # 引擎 1A: RVM 全自动快速抠像
     # =========================================================================
     def execute_rvm_auto(self):
         pipe = LiangLiangNukePipeline()
@@ -1292,6 +1299,82 @@ class AIMattingDispatcher(object):
         )
 
     # =========================================================================
+    # 引擎 1B: BiRefNet-HR-Matting 全自动高清万物/发丝抠像
+    # =========================================================================
+    def execute_birefnet_auto(self):
+        pipe = LiangLiangNukePipeline()
+        ep, shot, workarea_dir, _ = pipe.get_current_pipeline_context()
+        if not workarea_dir:
+            return
+
+        py_exe = self._get_python_exe()
+        if not py_exe or not os.path.exists(py_exe):
+            nuke.message("未检测到 [AI_VFX_Pipeline_Suite/python_embeded] 便携沙盒！")
+            return
+
+        roto_dir = os.path.join(workarea_dir, "roto", "birefnet").replace('\\', '/')
+        os.makedirs(roto_dir, exist_ok=True)
+        prefix_str = f"biref_{shot}"
+
+        p = nuke.Panel(f"Shot {shot} - BiRefNet 全自动高清万物抠像")
+        p.setWidth(480)
+        p.addEnumerationPulldown(
+            "运行模式与精度",
+            "1_标准高清模式_1024x1024(速度快_显存占用低_推荐) "
+            "2_极致发丝模式_2048x2048(2K超清边缘_适合特写) "
+            "3_直接导回已生成的序列(自动挂好Write与Viewer1)"
+        )
+        if not p.show():
+            return
+
+        choice = str(p.value("运行模式与精度")).strip()
+        if choice.startswith("3_"):
+            if os.name == "nt" and os.path.exists(roto_dir):
+                try:
+                    subprocess.Popen(["explorer.exe", os.path.normpath(roto_dir)])
+                except Exception:
+                    pass
+            self._import_matanyone2_nodes(roto_dir, prefix_str, engine_title="BiRefNet (2K高清万物)")
+            return
+
+        res_val = "2048" if choice.startswith("2_") else "1024"
+
+        input_folder = ""
+        read_plate = nuke.toNode("Read_Plate")
+        if read_plate and read_plate['file'].value():
+            input_folder = os.path.dirname(read_plate['file'].value()).replace('\\', '/')
+        if not input_folder or not os.path.exists(input_folder):
+            chosen = nuke.getFilename(f"【选择 Shot {shot} 实拍拆帧图片序列任一张】", "*.png *.jpg *.jpeg *.tif *.tiff")
+            if not chosen:
+                return
+            input_folder = os.path.dirname(chosen).replace('\\', '/')
+
+        cli_py = os.path.join(self.suite_root, "birefnet/run_birefnet_cli.py").replace('\\', '/')
+        cmd = [
+            os.path.normpath(py_exe),
+            os.path.normpath(cli_py),
+            "--input", os.path.normpath(input_folder),
+            "--output", os.path.normpath(roto_dir),
+            "--prefix", prefix_str,
+            "--res", res_val
+        ]
+
+        isolated_env = self._get_clean_ai_env(py_exe)
+        work_cwd = os.path.normpath(os.path.dirname(cli_py))
+
+        def _on_finished():
+            self._import_matanyone2_nodes(roto_dir, prefix_str, engine_title="BiRefNet (2K高清万物)")
+
+        self._run_with_live_console(
+            window_title=f"Shot {shot} - BiRefNet 全自动高清抠像进度 - {res_val}px",
+            cmd_list=cmd,
+            isolated_env=isolated_env,
+            work_cwd=work_cwd,
+            out_dir=roto_dir,
+            on_success_cb=_on_finished
+        )
+
+   # =========================================================================
     # 引擎 2: MatAnyone 2 (CVPR 2026) 发丝级目标锁定视频抠像
     # =========================================================================
     def execute_sam2_tracking(self):
@@ -1320,10 +1403,10 @@ class AIMattingDispatcher(object):
         p.setWidth(560)
         p.addEnumerationPulldown(
             "运行与首帧模式",
-            "1_全自动只抠人(无需画Roto) "
-            "2_只保留Roto圈内的人(在Holdout_Roto_KEEP画圈) "
-            "3_从人身上挖掉Roto区域(在Garbage_Roto_REMOVE画圈) "
-            "4_人加上Roto模块区域(在Holdout_Roto_KEEP画道具) "
+            "1_全自动抠主体(无需画Roto) "
+            "2_只保留Roto圈内的主体(在Holdout_Roto_KEEP画圈) "
+            "3_从主体上挖掉Roto区域(在Garbage_Roto_REMOVE画圈) "
+            "4_主体加上Roto模块区域(在Holdout_Roto_KEEP画道具) "
             "5_完全按Roto区域抠像(在Holdout_Roto_KEEP画任意物体) "
             "6_直接导回已生成的序列(自动挂好Write与Viewer1)"
         )
@@ -1349,7 +1432,7 @@ class AIMattingDispatcher(object):
                     subprocess.Popen(["explorer.exe", os.path.normpath(roto_dir)])
                 except Exception:
                     pass
-            self._import_matanyone2_nodes(roto_dir, prefix_str)
+            self._import_matanyone2_nodes(roto_dir, prefix_str, engine_title="MatAnyone 2 (CVPR 2026)")
             return
 
         mode_map = {
@@ -1409,6 +1492,7 @@ class AIMattingDispatcher(object):
             "--input", os.path.normpath(input_folder),
             "--output", os.path.normpath(roto_dir),
             "--mask_mode", mask_mode,
+            "--guide_engine", "birefnet",
             "--prefix", prefix_str,
             "--warmup", warmup_val,
             "--erode_kernel", kernel_val,
@@ -1422,10 +1506,154 @@ class AIMattingDispatcher(object):
         work_cwd = os.path.normpath(os.path.dirname(cli_py))
 
         def _on_finished():
-            self._import_matanyone2_nodes(roto_dir, prefix_str)
+            self._import_matanyone2_nodes(roto_dir, prefix_str, engine_title="MatAnyone 2 (CVPR 2026)")
 
         self._run_with_live_console(
-            window_title=f"Shot {shot} - MatAnyone 2 实时抠像进度 ({choice})",
+            window_title=f"Shot {shot} - MatAnyone 2 实时抠像进度",
+            cmd_list=cmd,
+            isolated_env=isolated_env,
+            work_cwd=work_cwd,
+            out_dir=roto_dir,
+            on_success_cb=_on_finished
+        )
+
+    # =========================================================================
+    # 引擎 3: SAM2Matting (ECCV 2026) 万物发丝级目标锁定视频抠像
+    # =========================================================================
+    def execute_sam2matting_tracking(self):
+        pipe = LiangLiangNukePipeline()
+        ep, shot, workarea_dir, _ = pipe.get_current_pipeline_context()
+        if not workarea_dir:
+            return
+
+        py_exe = self._get_python_exe()
+        if not py_exe or not os.path.exists(py_exe):
+            nuke.message("未检测到 [AI_VFX_Pipeline_Suite/python_embeded] 便携沙盒！")
+            return
+
+        roto_dir = os.path.join(workarea_dir, "roto", "sam2matting").replace('\\', '/')
+        os.makedirs(roto_dir, exist_ok=True)
+        prefix_str = f"sam2mat_{shot}"
+
+        read_plate = nuke.toNode("Read_Plate")
+        default_first_f = int(nuke.root()['first_frame'].value())
+        if read_plate and 'first' in read_plate.knobs():
+            default_first_f = int(read_plate['first'].value())
+
+        sel_nodes = [n for n in nuke.selectedNodes() if n.Class() in ("Roto", "RotoPaint", "Read", "Merge2", "ChannelMerge")]
+
+        p = nuke.Panel(f"Shot {shot} - SAM2Matting (ECCV 2026) 万物发丝级跟踪抠像")
+        p.setWidth(560)
+        p.addEnumerationPulldown(
+            "运行与首帧模式",
+            "1_全自动抠主体(无需画Roto) "
+            "2_只保留Roto圈内的主体(在Holdout_Roto_KEEP画圈) "
+            "3_从主体上挖掉Roto区域(在Garbage_Roto_REMOVE画圈) "
+            "4_主体加上Roto模块区域(在Holdout_Roto_KEEP画道具) "
+            "5_原生框选锁定任意物体(在Holdout_Roto_KEEP随手画圈即自动贴合边缘) "
+            "6_直接导回已生成的序列(自动挂好Write与Viewer1)"
+        )
+        p.addEnumerationPulldown(
+            "SAM2Matting模型规格",
+            "1_SAM2.1_Base+(高精度发丝细节_30FPS_推荐) "
+            "2_SAM2.1_Tiny(极速预览_40FPS_超低显存)"
+        )
+        p.addSingleLineInput("起始运算帧(填帧号可从中途补救重算)", str(default_first_f))
+        if not p.show():
+            return
+
+        choice = str(p.value("运行与首帧模式")).strip()
+        variant_choice = str(p.value("SAM2Matting模型规格")).strip()
+        start_f_str = str(p.value("起始运算帧(填帧号可从中途补救重算)")).strip()
+
+        variant_val = "tiny" if variant_choice.startswith("2_") else "base_plus"
+
+        try:
+            guide_frame = int(start_f_str)
+        except Exception:
+            guide_frame = default_first_f
+
+        if choice.startswith("6_"):
+            if os.name == "nt" and os.path.exists(roto_dir):
+                try:
+                    subprocess.Popen(["explorer.exe", os.path.normpath(roto_dir)])
+                except Exception:
+                    pass
+            self._import_matanyone2_nodes(roto_dir, prefix_str, engine_title="SAM2Matting (ECCV 2026)")
+            return
+
+        mode_map = {
+            "1_": "auto",
+            "2_": "intersect",
+            "3_": "subtract",
+            "4_": "union",
+            "5_": "replace"
+        }
+        mask_mode = mode_map.get(choice[:2], "auto")
+
+        input_folder = ""
+        if read_plate and read_plate['file'].value():
+            input_folder = os.path.dirname(read_plate['file'].value()).replace('\\', '/')
+        if not input_folder or not os.path.exists(input_folder):
+            chosen = nuke.getFilename(f"【选择 Shot {shot} 实拍拆帧图片序列任一张】", "*.png *.jpg *.jpeg *.tif *.tiff")
+            if not chosen:
+                return
+            input_folder = os.path.dirname(chosen).replace('\\', '/')
+
+        first_mask_path = ""
+        if mask_mode != "auto":
+            if sel_nodes:
+                roto_node = sel_nodes[0]
+            elif mask_mode == "subtract":
+                roto_node = nuke.toNode("Garbage_Roto_REMOVE") or nuke.toNode("Holdout_Roto_KEEP")
+            else:
+                roto_node = nuke.toNode("Holdout_Roto_KEEP")
+
+            if not roto_node:
+                nuke.message(
+                    f"你选择了【{choice}】\n\n"
+                    f"未找到 Holdout_Roto_KEEP 或 Garbage_Roto_REMOVE 节点，请先在画布中创建并选中一个 Roto 节点！"
+                )
+                return
+
+            first_mask_path = os.path.join(roto_dir, f"_nuke_roto_frame_{guide_frame}.png").replace('\\', '/')
+
+            reformat = nuke.createNode("Reformat", inpanel=False)
+            reformat.setInput(0, roto_node)
+            if read_plate and 'format' in read_plate.knobs():
+                reformat['format'].setValue(read_plate['format'].value())
+
+            w_temp = nuke.createNode("Write", inpanel=False)
+            w_temp.setInput(0, reformat)
+            w_temp['channels'].setValue("alpha")
+            w_temp['file'].setValue(first_mask_path)
+            w_temp['file_type'].setValue("png")
+            nuke.execute(w_temp, guide_frame, guide_frame)
+            nuke.delete(w_temp)
+            nuke.delete(reformat)
+
+        cli_py = os.path.join(self.suite_root, "sam2matting/run_sam2matting_cli.py").replace('\\', '/')
+        cmd = [
+            os.path.normpath(py_exe),
+            os.path.normpath(cli_py),
+            "--input", os.path.normpath(input_folder),
+            "--output", os.path.normpath(roto_dir),
+            "--mask_mode", mask_mode,
+            "--variant", variant_val,
+            "--prefix", prefix_str,
+            "--start_at", str(guide_frame)
+        ]
+        if first_mask_path and os.path.exists(first_mask_path):
+            cmd.extend(["--mask", os.path.normpath(first_mask_path)])
+
+        isolated_env = self._get_clean_ai_env(py_exe)
+        work_cwd = os.path.normpath(os.path.dirname(cli_py))
+
+        def _on_finished():
+            self._import_matanyone2_nodes(roto_dir, prefix_str, engine_title="SAM2Matting (ECCV 2026)")
+
+        self._run_with_live_console(
+            window_title=f"Shot {shot} - SAM2Matting 实时抠像进度 - {variant_val}",
             cmd_list=cmd,
             isolated_env=isolated_env,
             work_cwd=work_cwd,
@@ -1449,6 +1677,14 @@ def show_ai_rvm_menu():
     dispatcher = AIMattingDispatcher()
     dispatcher.execute_rvm_auto()
 
+def show_ai_birefnet_menu():
+    dispatcher = AIMattingDispatcher()
+    dispatcher.execute_birefnet_auto()
+
 def show_ai_sam2_menu():
     dispatcher = AIMattingDispatcher()
     dispatcher.execute_sam2_tracking()
+
+def show_ai_sam2matting_menu():
+    dispatcher = AIMattingDispatcher()
+    dispatcher.execute_sam2matting_tracking()
