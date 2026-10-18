@@ -51,14 +51,19 @@ class UECamWorkflowPipeline(object):
             pass
         return default_dir
 
-    def save_root_dir(self, root_dir):
-        """保存用户设置的根目录路径"""
+    def save_root_dir(self, root_dir, shot_key="", fbx_disk_path=""):
+        """保存用户设置的根目录路径及当前镜头的服务器物理路径映射"""
         try:
             data = {}
             if os.path.exists(CONFIG_FILE_PATH):
                 with open(CONFIG_FILE_PATH, 'r', encoding='utf-8') as f:
                     data = json.load(f)
             data["root_dir"] = root_dir
+            if shot_key and fbx_disk_path:
+                if "shot_disk_map" not in data:
+                    data["shot_disk_map"] = {}
+                data["shot_disk_map"][shot_key.upper()] = fbx_disk_path
+                data["last_fbx_path"] = fbx_disk_path
             with open(CONFIG_FILE_PATH, 'w', encoding='utf-8') as f:
                 json.dump(data, f, ensure_ascii=False, indent=4)
         except Exception as e:
@@ -394,11 +399,10 @@ class UECamWorkflowPipeline(object):
             unreal.EditorDialog.show_message("错误", f"找不到相机文件:\n{clean_fbx}", unreal.AppMsgType.OK)
             return False
 
-        self.save_root_dir(user_root_path)
-
         # 1. 提取元数据
         ep_det, shot, plate_s, plate_e, raw_shot_len, duration = self.parse_metadata_from_path(clean_fbx)
         ep = custom_ep.strip() if custom_ep.strip() else ep_det
+        self.save_root_dir(user_root_path, shot_key=f"{ep}_{shot}", fbx_disk_path=clean_fbx)
 
         # 2. 目录与 Level Sequence 创建
         target_folder = f"{user_root_path.rstrip('/')}/{ep}/Shot_{shot}"
