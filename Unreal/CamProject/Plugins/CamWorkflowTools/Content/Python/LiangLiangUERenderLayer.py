@@ -1,14 +1,16 @@
 # -*- coding: utf-8 -*-
 """
-UE5.3/5.4 影视级镜头分层裂变与 Movie Render Queue (MRQ) 自动化调度中心 v5.1 Studio Pro
+UE5.3/5.4 影视级镜头分层裂变与 Movie Render Queue (MRQ) 自动化调度中心 v5.3 Studio Pro
 -------------------------------------------------------------------------
 核心特性：
-1. [100% 自动弹出 Movie Render Queue 面板]：
-   - 解决 log_v11.txt 中 /Engine/Transient 临时对象被 AssetEditorSubsystem 忽略的问题；
-   - 自动将队列同步至 /Shot/Collection/MRQ_ActiveQueue 真实资产并调用 open_editor_for_assets，100% 唤起并置顶 MRQ 面板。
-2. [MRQ 预设绑定状态实时联动]：
-   - 挂载 StringVar.trace_add("write") 实时监听：手动删空路径或点击「清空」按钮时，状态立即变为红色「● 未绑定」。
-3. [UE5 Slate 工业级深色卡片 UI + 底部创作者与 GitHub / YouTube / Email 矢量图标跳转栏]。
+1. [按钮 3 精准置顶唤起 MRQ 队列面板 (修复双屏/主窗口遮挡与 Transient 警告)]：
+   - 优先锁定标题含 "Movie Render Queue" / "影片渲染队列" 的独立 Slate 窗口并通过 Win32 TOPMOST 脉冲将其置于最前，
+     彻底解决此前误将 UE 主窗口置顶从而把 MRQ 独立窗口压在背面的问题；
+   - 唤醒面板后自动还原无 QueueOrigin 污染的纯净队列引用，消除 PIE 渲染时的 /Engine/Transient 链接警告。
+2. [与 LiangLiangUECamWorkflow 深度路径联动 + 启动即检测 + 选一次永久保存]：
+   - 面板启动及切换镜头时自动检测 UECamWorkflowConfig.json (shot_disk_map / shot_ue_root_map) 与 ImgMediaSource 路径；
+   - 在 02 区实时展示联动输出路径状态；若联动引用缺失则主动提示指定一次，一旦指定立即持久化写入配置文件，绝不重复弹窗。
+3. [按钮 1 静默生成分层序列并加入 MRQ 队列 + 彻底防崩保护 + 大厂深色卡片 UI]。
 -------------------------------------------------------------------------
 Author: LiangLiangArtist
 Contact: liangliangvfx@gmail.com
@@ -22,6 +24,8 @@ import ctypes
 import subprocess
 import webbrowser
 import unreal
+
+TOOL_VERSION_TAG   = "5.3"
 
 # =========================================================================
 # 创作者与社交主页配置 (点击 UI 底部对应图标直接跳转)
@@ -68,7 +72,7 @@ CVAR_EASYFOG_LAYER = {
     "ShowFlag.Fog": 0,
 }
 
-# MRQ GameOverrides 污染变量清理黑名单
+# MRQ GameOverrides 污染变量清理黑名单 (仅用于保持 CVarPresets 雾气资产纯净，不影响 MRQ 渲染预设中的 Game Overrides 生效)
 POLLUTED_MRQ_CVARS = [
     "sg.ViewDistanceQuality", "sg.AntiAliasingQuality", "sg.ShadowQuality",
     "sg.GlobalIlluminationQuality", "sg.ReflectionQuality", "sg.PostProcessQuality",
@@ -87,7 +91,7 @@ DERIVED_SEQ_SUFFIXES = (
 
 
 # =========================================================================
-# 渲染完成自动弹出输出目录监听器 & 窗口焦点辅助函数
+# 渲染完成自动弹出输出目录监听器 & 窗口精准置顶辅助函数
 # =========================================================================
 def open_folder_in_explorer(folder_path):
     if not folder_path:
@@ -110,7 +114,33 @@ def open_folder_in_explorer(folder_path):
             return False
 
 
+def _force_hwnd_to_foreground(user32, hwnd):
+    """通过 Win32 TOPMOST 脉冲将目标窗口强制提到最前面，突破 Windows 前台焦点锁"""
+    SW_RESTORE = 9
+    HWND_TOPMOST = -1
+    HWND_NOTOPMOST = -2
+    SWP_NOMOVE = 0x0002
+    SWP_NOSIZE = 0x0001
+    SWP_SHOWWINDOW = 0x0040
+    try:
+        if user32.IsIconic(hwnd):
+            user32.ShowWindow(hwnd, SW_RESTORE)
+        else:
+            user32.ShowWindow(hwnd, 5)  # SW_SHOW
+        user32.SetWindowPos(hwnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_SHOWWINDOW)
+        user32.SetWindowPos(hwnd, HWND_NOTOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_SHOWWINDOW)
+        user32.SetForegroundWindow(hwnd)
+        user32.BringWindowToTop(hwnd)
+    except Exception:
+        pass
+
+
 def _bring_mrq_or_ue_window_to_front(tk_win=None):
+    """
+    两阶段精确置顶：
+    1. 优先搜索当前 UE 进程中标题含 'Movie Render Queue' 或 '影片渲染队列' 的独立窗口并直接置顶（绝不把主编辑器窗口盖在它上面）；
+    2. 仅当 MRQ 面板被停靠（Dock）在主编辑器内部而非独立窗口时，才将 UE 主编辑器窗口置顶。
+    """
     try:
         if tk_win and tk_win.winfo_exists():
             tk_win.attributes('-topmost', False)
@@ -120,19 +150,12 @@ def _bring_mrq_or_ue_window_to_front(tk_win=None):
 
     try:
         user32 = ctypes.windll.user32
-        SW_RESTORE = 9
-        for title_name in ("Movie Render Queue", "影片渲染队列"):
-            hwnd = user32.FindWindowW(None, title_name)
-            if hwnd:
-                if user32.IsIconic(hwnd):
-                    user32.ShowWindow(hwnd, SW_RESTORE)
-                user32.SetForegroundWindow(hwnd)
-                user32.BringWindowToTop(hwnd)
-                return
-
         WNDENUMPROC = ctypes.WINFUNCTYPE(ctypes.c_bool, ctypes.c_void_p, ctypes.c_void_p)
         cur_pid = os.getpid()
         tk_hwnd = user32.GetParent(tk_win.winfo_id()) if (tk_win and tk_win.winfo_exists()) else 0
+
+        mrq_hwnds = []
+        ue_main_hwnds = []
 
         def _enum_cb(hwnd, lparam):
             if user32.IsWindowVisible(hwnd) and hwnd != tk_hwnd:
@@ -144,15 +167,30 @@ def _bring_mrq_or_ue_window_to_front(tk_win=None):
                         buf = ctypes.create_unicode_buffer(length + 1)
                         user32.GetWindowTextW(hwnd, buf, length + 1)
                         w_title = buf.value
-                        if "Unreal Editor" in w_title or "Movie Render Queue" in w_title or "CamProject" in w_title:
-                            user32.SetForegroundWindow(hwnd)
-                            user32.BringWindowToTop(hwnd)
-                            return False
+                        if "Movie Render Queue" in w_title or "影片渲染队列" in w_title:
+                            mrq_hwnds.append(hwnd)
+                        elif "Unreal Editor" in w_title:
+                            ue_main_hwnds.append(hwnd)
             return True
 
         user32.EnumWindows(WNDENUMPROC(_enum_cb), 0)
+
+        if mrq_hwnds:
+            _force_hwnd_to_foreground(user32, mrq_hwnds[0])
+            return True
+
+        for title_name in ("Movie Render Queue", "影片渲染队列"):
+            hwnd = user32.FindWindowW(None, title_name)
+            if hwnd:
+                _force_hwnd_to_foreground(user32, hwnd)
+                return True
+
+        if ue_main_hwnds:
+            _force_hwnd_to_foreground(user32, ue_main_hwnds[0])
+            return True
     except Exception:
         pass
+    return False
 
 
 def _extract_output_dir_from_active_queue():
@@ -369,6 +407,8 @@ class UERenderLayerPipeline(object):
 
         ep = "EP01"
         ep_m = re.search(r'(ep\d+)', pkg_path, re.IGNORECASE)
+        if not ep_m:
+            ep_m = re.search(r'(ep\d+)', seq_name, re.IGNORECASE)
         if ep_m:
             ep = ep_m.group(1).upper()
 
@@ -738,21 +778,21 @@ class UERenderLayerPipeline(object):
         if not asset_obj:
             return cmd_names
 
-        if cvar_lib and hasattr(cvar_lib, "get_list_of_commands_from_preset"):
+        if hasattr(asset_obj, "get_saved_commands_as_string_array"):
             try:
-                raw_list = cvar_lib.get_list_of_commands_from_preset(asset_obj) or []
-                for item in raw_list:
-                    k = str(item).strip().split()[0]
+                arr = asset_obj.get_saved_commands_as_string_array(False) or []
+                for s in arr:
+                    k = str(s).strip().split(":")[0].split()[0]
                     if k and k not in cmd_names:
                         cmd_names.append(k)
             except Exception:
                 pass
 
-        if not cmd_names and hasattr(asset_obj, "get_saved_commands_as_string_array"):
+        if not cmd_names and cvar_lib and hasattr(cvar_lib, "get_list_of_commands_from_preset"):
             try:
-                arr = asset_obj.get_saved_commands_as_string_array(False) or []
-                for s in arr:
-                    k = str(s).strip().split()[0]
+                raw_list = cvar_lib.get_list_of_commands_from_preset(asset_obj) or []
+                for item in raw_list:
+                    k = str(item).strip().split()[0]
                     if k and k not in cmd_names:
                         cmd_names.append(k)
             except Exception:
@@ -802,11 +842,11 @@ class UERenderLayerPipeline(object):
 
             if not is_clean_and_exact and cvar_lib:
                 try:
-                    if hasattr(cvar_lib, "copy_current_list_to_asset"):
-                        cvar_lib.copy_current_list_to_asset(asset_obj)
+                    for cv_k, cv_v in cvar_dict.items():
+                        if hasattr(cvar_lib, "add_validated_command_to_current_preset"):
+                            cvar_lib.add_validated_command_to_current_preset(f"{cv_k} {cv_v}")
 
-                    all_polluted = self._get_existing_command_names_in_asset(asset_obj, cvar_lib)
-                    cmds_to_purge = set(all_polluted) | set(existing_cmd_names) | set(POLLUTED_MRQ_CVARS) | expected_keys_set
+                    cmds_to_purge = (set(existing_cmd_names) | set(POLLUTED_MRQ_CVARS)) - expected_keys_set
                     if hasattr(cvar_lib, "remove_command_from_current_preset"):
                         for bad_cmd in cmds_to_purge:
                             if bad_cmd:
@@ -991,49 +1031,51 @@ class UERenderLayerPipeline(object):
             return False
 
     # =========================================================================
-    # 4. 根治 log_v11.txt 第 125 行 Transient 拦截问题，100% 弹出 MRQ 面板
+    # 4. 模拟手点菜单 (Window -> Cinematics -> Movie Render Queue) 唤起并置顶 MRQ 面板
     # =========================================================================
     def open_mrq_panel_reliably(self):
+        """
+        1. 触发 FAssetTypeActions_MoviePipelineQueue::OpenAssetEditor -> FGlobalTabmanager::Get()->TryInvokeTab("MovieRenderPipeline")；
+        2. 唤醒面板后立刻用无 QueueOrigin 的 clean_q 覆盖还原，消除 PIE 渲染时 Failed to load '/Engine/Transient' 警告；
+        3. 调用两阶段 Win32 置顶函数，直接将独立的 'Movie Render Queue' 窗口提到最前方，不再被 UE 主窗口遮挡！
+        """
         try:
-            std_dirs = self.detect_project_standard_folders()
-            col_dir = std_dirs["collection_dir"]
-            if not self.asset_sub.does_directory_exist(col_dir):
-                self.asset_sub.make_directory(col_dir)
-
-            q_asset_name = "MRQ_ActiveQueue"
-            q_pkg_path = f"{col_dir}/{q_asset_name}"
-
             cur_q = self.mrq_sub.get_queue()
-            if cur_q and hasattr(cur_q, "set_is_dirty"):
-                cur_q.set_is_dirty(False)
+            clean_backup_q = unreal.MoviePipelineQueue()
+            if cur_q:
+                if hasattr(clean_backup_q, "copy_from"):
+                    clean_backup_q.copy_from(cur_q)
+                if hasattr(cur_q, "set_is_dirty"):
+                    cur_q.set_is_dirty(False)
 
-            q_asset = None
-            if self.asset_sub.does_asset_exist(q_pkg_path):
-                q_asset = self.asset_sub.load_asset(q_pkg_path)
-
-            if not q_asset:
-                pkg = unreal.create_package(q_pkg_path)
-                q_asset = unreal.find_object(pkg, q_asset_name)
-                if not q_asset:
-                    q_asset = unreal.new_object(unreal.MoviePipelineQueue, outer=pkg, name=unreal.Name(q_asset_name))
+            transient_pkg = unreal.find_object(None, "/Engine/Transient")
+            q_asset = unreal.find_object(transient_pkg, "Transient") if transient_pkg else None
+            if not q_asset or not isinstance(q_asset, unreal.MoviePipelineQueue):
+                q_asset = unreal.new_object(
+                    unreal.MoviePipelineQueue,
+                    outer=transient_pkg,
+                    name=unreal.Name("Transient")
+                )
 
             if q_asset and cur_q:
                 if hasattr(q_asset, "copy_from"):
                     q_asset.copy_from(cur_q)
                 if hasattr(q_asset, "set_is_dirty"):
                     q_asset.set_is_dirty(False)
-                try:
-                    self.asset_sub.save_loaded_asset(q_asset, only_if_is_dirty=False)
-                except Exception:
-                    pass
+                if hasattr(cur_q, "set_is_dirty"):
+                    cur_q.set_is_dirty(False)
 
             asset_ed = unreal.get_editor_subsystem(unreal.AssetEditorSubsystem)
             if asset_ed and q_asset:
                 asset_ed.open_editor_for_assets([q_asset])
 
+            # 还原为无 /Engine/Transient.Transient QueueOrigin 的纯净队列引用
             active_q = self.mrq_sub.get_queue()
-            if active_q and hasattr(active_q, "set_is_dirty"):
-                active_q.set_is_dirty(False)
+            if active_q:
+                if hasattr(active_q, "copy_from"):
+                    active_q.copy_from(clean_backup_q)
+                if hasattr(active_q, "set_is_dirty"):
+                    active_q.set_is_dirty(False)
 
             _bring_mrq_or_ue_window_to_front(getattr(sys, "_LL_RENDER_TK_WIN", None))
             return True
@@ -1247,44 +1289,177 @@ class UERenderLayerPipeline(object):
         except Exception as e:
             return False, f"启动渲染异常: {e}"
 
-    def resolve_and_create_publish_render_dir(self, ep, shot, custom_ue_dir="", force_new_version=True, seq_names_to_clean=None):
+    # =========================================================================
+    # 5. 与 LiangLiangUECamWorkflow 深度联通的服务器路径检测与持久化记忆
+    # =========================================================================
+    def _derive_ue_dir_from_any_disk_path(self, raw_disk_path, ep, shot):
+        """从 FBX 路径、背景序列路径或任意镜头目录智能推导 .../epXX/shot/ue 目录"""
+        if not raw_disk_path:
+            return ""
+        clean_p = os.path.normpath(str(raw_disk_path).strip()).replace('\\', '/')
+        if os.path.isfile(clean_p) or clean_p.lower().endswith(".fbx"):
+            chk = os.path.dirname(clean_p)
+        else:
+            chk = clean_p.rstrip('/')
+
+        if not os.path.exists(chk):
+            return ""
+
+        # 1. 若本身就是 .../publish/vXXX/render 或 .../publish 或 .../ue
+        low_chk = chk.lower()
+        if low_chk.endswith("/render") and "/publish/" in low_chk:
+            pub_idx = low_chk.rfind("/publish/")
+            return chk[:pub_idx]
+        if low_chk.endswith("/publish"):
+            return os.path.dirname(chk).replace('\\', '/')
+        if os.path.basename(chk).lower() == "ue":
+            return chk
+
+        # 2. 向上回溯最多 6 层寻找 ue 目录或镜头号目录 (如 .../ep28/2180)
+        cur = chk
+        shot_dir_cand = ""
+        for _ in range(6):
+            base_low = os.path.basename(cur).lower()
+            if base_low == "ue":
+                return cur
+            if os.path.exists(os.path.join(cur, "ue")):
+                return os.path.join(cur, "ue").replace('\\', '/')
+            if base_low in (str(shot).lower(), f"shot_{shot}".lower(), f"{ep.lower()}_{shot}".lower()):
+                shot_dir_cand = cur
+            if base_low in ("cam", "camera", "maya", "fbx", "export", "workarea", "plate", "plates", "bg"):
+                parent_d = os.path.dirname(cur).replace('\\', '/')
+                if parent_d and parent_d != cur:
+                    if os.path.basename(parent_d).lower() == "ue":
+                        return parent_d
+                    shot_dir_cand = parent_d
+            parent = os.path.dirname(cur).replace('\\', '/')
+            if not parent or parent == cur:
+                break
+            cur = parent
+
+        if shot_dir_cand and os.path.exists(shot_dir_cand):
+            return os.path.join(shot_dir_cand, "ue").replace('\\', '/')
+
+        # 3. 若 FBX 直接放在某个测试目录下（无标准 ep/shot 层级），以 FBX 所在目录的 ue 子目录或同级构建
+        if re.search(r'/ep\d+/\d{3,5}', chk, re.IGNORECASE):
+            m = re.search(r'^(.*?/ep\d+/\d{3,5})', chk, re.IGNORECASE)
+            if m:
+                return f"{m.group(1)}/ue"
+
+        return ""
+
+    def detect_linked_ue_output_root(self, ep, shot, master_seq=None):
+        """
+        四级联动检测当前镜头的 UE 渲染输出根目录 (不弹窗)：
+        1. 配置文件中的 shot_ue_root_map (已绑定的镜头专属输出目录)；
+        2. LiangLiangUECamWorkflow 写入的 shot_disk_map[EP_SHOT]；
+        3. 镜头目录下的 ImgMediaSource (epXX_camXXXX_bg) 序列路径；
+        4. last_ue_root_dir 或 last_fbx_path 跨镜头模板推导。
+        """
+        cfg = self.load_config()
+        shot_key = f"{ep.upper()}_{shot}"
+
+        # 1. 优先读取已直接绑定的 shot_ue_root_map
+        ue_root_map = cfg.get("shot_ue_root_map", {})
+        saved_ue_dir = str(ue_root_map.get(shot_key, "")).strip()
+        if saved_ue_dir:
+            norm_s = os.path.normpath(saved_ue_dir).replace('\\', '/')
+            parent_check = os.path.dirname(norm_s) if not os.path.exists(norm_s) else norm_s
+            if os.path.exists(parent_check):
+                return norm_s
+
+        # 2. 读取 LiangLiangUECamWorkflow 保存的 shot_disk_map
+        shot_map = cfg.get("shot_disk_map", {})
+        fbx_path = str(shot_map.get(shot_key, "")).strip()
+        if not fbx_path:
+            for k, v in shot_map.items():
+                if str(k).upper().endswith(f"_{shot}") and v:
+                    fbx_path = str(v).strip()
+                    break
+
+        if fbx_path:
+            derived = self._derive_ue_dir_from_any_disk_path(fbx_path, ep, shot)
+            if derived:
+                self.save_linked_ue_output_root(ep, shot, derived)
+                return derived
+
+        # 3. 从母版序列同目录的 bg/epXX_camXXXX_bg (ImgMediaSource) 提取路径
+        if master_seq:
+            try:
+                seq_pkg = master_seq.get_path_name().split('.')[0]
+                shot_folder = os.path.dirname(seq_pkg)
+                bg_asset_path = f"{shot_folder}/bg/{ep.lower()}_cam{shot}_bg"
+                if self.asset_sub.does_asset_exist(bg_asset_path):
+                    img_src = self.asset_sub.load_asset(bg_asset_path)
+                    if img_src:
+                        seq_p_struct = img_src.get_editor_property("sequence_path")
+                        raw_bg_p = str(seq_p_struct.path).strip() if seq_p_struct else ""
+                        if raw_bg_p:
+                            derived = self._derive_ue_dir_from_any_disk_path(raw_bg_p, ep, shot)
+                            if derived:
+                                self.save_linked_ue_output_root(ep, shot, derived)
+                                return derived
+            except Exception:
+                pass
+
+        # 4. 从 last_ue_root_dir 或 last_fbx_path 跨镜头自动替换 ep 与 shot
+        for fallback_raw in (cfg.get("last_ue_root_dir", ""), cfg.get("last_fbx_path", "")):
+            if not fallback_raw:
+                continue
+            cand_dir = self._derive_ue_dir_from_any_disk_path(fallback_raw, ep, shot) or str(fallback_raw).replace('\\', '/')
+            if cand_dir:
+                replaced = re.sub(r'/ep\d+/\d{3,5}/ue$', f"/{ep.lower()}/{shot}/ue", cand_dir, flags=re.IGNORECASE)
+                # 校验项目的上级根目录是否存在
+                proj_parent = os.path.dirname(os.path.dirname(os.path.dirname(replaced)))
+                if os.path.exists(proj_parent):
+                    self.save_linked_ue_output_root(ep, shot, replaced)
+                    return replaced
+
+        return ""
+
+    def save_linked_ue_output_root(self, ep, shot, ue_root_dir):
+        """将当前镜头的 ue 输出根目录永久保存到 UECamWorkflowConfig.json，避免重复弹窗"""
+        if not ue_root_dir:
+            return
+        norm_u = os.path.normpath(str(ue_root_dir).strip()).replace('\\', '/')
+        if norm_u.lower().endswith("/render") and "/publish/" in norm_u.lower():
+            idx = norm_u.lower().rfind("/publish/")
+            norm_u = norm_u[:idx]
+        elif norm_u.lower().endswith("/publish"):
+            norm_u = os.path.dirname(norm_u).replace('\\', '/')
+
+        cfg = self.load_config()
+        if "shot_ue_root_map" not in cfg or not isinstance(cfg.get("shot_ue_root_map"), dict):
+            cfg["shot_ue_root_map"] = {}
+        shot_key = f"{ep.upper()}_{shot}"
+        cfg["shot_ue_root_map"][shot_key] = norm_u
+        cfg["last_ue_root_dir"] = norm_u
+        self.save_config(cfg)
+
+    def resolve_and_create_publish_render_dir(self, ep, shot, custom_ue_dir="", force_new_version=True, seq_names_to_clean=None, master_seq=None):
         ue_root_dir = ""
 
-        if custom_ue_dir and os.path.exists(custom_ue_dir):
-            clean_custom = os.path.normpath(custom_ue_dir).replace('\\', '/')
+        if custom_ue_dir and str(custom_ue_dir).strip():
+            clean_custom = os.path.normpath(str(custom_ue_dir).strip()).replace('\\', '/')
             if clean_custom.lower().endswith("/render") and "/publish/v" in clean_custom.lower():
                 os.makedirs(clean_custom, exist_ok=True)
+                self.save_linked_ue_output_root(ep, shot, clean_custom)
                 return clean_custom
             ue_root_dir = clean_custom
 
         if not ue_root_dir:
-            cfg = self.load_config()
-            shot_map = cfg.get("shot_disk_map", {})
-            fbx_path = shot_map.get(f"{ep.upper()}_{shot}", "") or cfg.get("last_fbx_path", "")
-            if fbx_path:
-                chk = os.path.normpath(os.path.dirname(fbx_path)).replace('\\', '/')
-                for _ in range(5):
-                    if os.path.basename(chk).lower() == "ue":
-                        ue_root_dir = chk
-                        break
-                    if os.path.exists(os.path.join(chk, "ue")):
-                        ue_root_dir = os.path.join(chk, "ue").replace('\\', '/')
-                        break
-                    parent = os.path.dirname(chk)
-                    if parent == chk:
-                        break
-                    chk = parent
-
-                if ue_root_dir:
-                    ue_root_dir = re.sub(r'/ep\d+/\d{3,5}/ue$', f"/{ep.lower()}/{shot}/ue", ue_root_dir, flags=re.IGNORECASE)
+            ue_root_dir = self.detect_linked_ue_output_root(ep, shot, master_seq=master_seq)
 
         if not ue_root_dir:
             import tkinter as tk
             from tkinter import filedialog
-            chosen = filedialog.askdirectory(title=f"请选择 Shot {shot} 的 ue 目录 (如 X:/.../ep28/{shot}/ue)")
+            chosen = filedialog.askdirectory(title=f"未检测到相机联动路径，请指定一次 Shot {shot} 的 ue 输出目录 (指定后将自动永久记住)")
             if not chosen:
                 return ""
             ue_root_dir = os.path.normpath(chosen).replace('\\', '/')
+
+        # 永久记住该镜头输出根路径，后续点击绝不再重复弹窗！
+        self.save_linked_ue_output_root(ep, shot, ue_root_dir)
 
         if ue_root_dir.lower().endswith("/publish"):
             publish_dir = ue_root_dir
@@ -1382,7 +1557,8 @@ class UERenderLayerPipeline(object):
         seq_names = [s.get_name() for s, _, _ in queued_items]
         render_out_dir = self.resolve_and_create_publish_render_dir(
             ep, shot, custom_ue_dir=custom_publish_dir,
-            force_new_version=auto_increment_version, seq_names_to_clean=seq_names
+            force_new_version=auto_increment_version, seq_names_to_clean=seq_names,
+            master_seq=master_seq
         )
         if not render_out_dir:
             return False, "未选择有效的 publish 输出目录。"
@@ -1412,11 +1588,12 @@ class UERenderLayerPipeline(object):
             p_name = target_preset.get_name() if target_preset else f"未绑定({final_pk})"
             bound_summary.append(f"• {seq_obj.get_name():<22}  ➔  预设: [{p_name}]")
 
-        self.open_mrq_panel_reliably()
+        if hasattr(queue, "set_is_dirty"):
+            queue.set_is_dirty(False)
 
         ver_mode_str = "自动递增新版本" if auto_increment_version else "直接替换当前版本"
         msg = (
-            f"【已将现有 {len(queued_items)} 个序列重新加入 MRQ 队列并唤起面板】\n\n"
+            f"【已将现有 {len(queued_items)} 个序列重新加入 MRQ 队列】\n\n"
             f"• 版本策略: {ver_mode_str}\n"
             f"• 输出路径: {render_out_dir} (渲染完成后将自动弹出此文件夹)\n\n" + "\n".join(bound_summary)
         )
@@ -1462,6 +1639,29 @@ class UERenderLayerPipeline(object):
                 "• 方式 2：若该场景无需拆分灯光层，请切换为【模式一：单层快速模式】。"
             )
 
+        # 先解析并校验输出路径（避免拆完层后用户取消文件夹选择）
+        render_out_dir = self.resolve_and_create_publish_render_dir(
+            ep, shot, custom_ue_dir=custom_publish_dir,
+            force_new_version=auto_increment_version, seq_names_to_clean=None,
+            master_seq=master_seq
+        )
+        if not render_out_dir:
+            return False, "未指定有效的 publish 输出目录。"
+
+        # 防崩保护：在删除和同名复制序列前，先关闭当前打开的 Sequencer 并清空 MRQ 队列，解除底层对旧序列的引用锁
+        try:
+            unreal.LevelSequenceEditorBlueprintLibrary.close_level_sequence()
+        except Exception:
+            pass
+
+        queue = self.mrq_sub.get_queue()
+        if clear_existing_queue and queue:
+            try:
+                queue.delete_all_jobs()
+            except Exception:
+                pass
+
+        master_seq = self.asset_sub.load_asset(master_pkg_path)
         scence_lvls = cls_lvls["scence"]
         global_mpc = self.get_or_create_global_emiss_mpc()
         cvar_assets_map = self.get_or_create_cvar_presets()
@@ -1554,12 +1754,17 @@ class UERenderLayerPipeline(object):
                 queued_jobs_info.append((dup_seq, preset_key, vis_lvls, suffix))
 
         seq_names = [s.get_name() for s, _, _, _ in queued_jobs_info]
-        render_out_dir = self.resolve_and_create_publish_render_dir(
-            ep, shot, custom_ue_dir=custom_publish_dir,
-            force_new_version=auto_increment_version, seq_names_to_clean=seq_names
-        )
-        if not render_out_dir:
-            return False, "未指定有效的 publish 输出目录。"
+        if not auto_increment_version and seq_names and os.path.exists(render_out_dir):
+            try:
+                prefixes = tuple(f"{sn.lower()}." for sn in seq_names)
+                for f in os.listdir(render_out_dir):
+                    if f.lower().startswith(prefixes) and f.lower().endswith(('.exr', '.png', '.jpg', '.jpeg')):
+                        try:
+                            os.remove(os.path.join(render_out_dir, f))
+                        except Exception:
+                            pass
+            except Exception:
+                pass
 
         ensure_mrq_render_finish_monitor_active(render_out_dir)
 
@@ -1587,12 +1792,12 @@ class UERenderLayerPipeline(object):
             p_name = target_preset.get_name() if target_preset else f"未绑定({final_pk})"
             summary_lines.append(f"• {seq_obj.get_name():<22}  ➔  预设: [{p_name:<26}]  |  显示关卡: {lvls}")
 
-        # 所有分层 Job 入列完毕后，同步保存至 MRQ_ActiveQueue.uasset 并直接唤起 MRQ 窗口
-        self.open_mrq_panel_reliably()
+        if hasattr(queue, "set_is_dirty"):
+            queue.set_is_dirty(False)
 
         ver_mode_str = "自动递增新版本 (v001 -> v002)" if auto_increment_version else "直接替换当前版本 (覆盖旧图)"
         msg = (
-            f"【Shot {shot} 场景分层与 MRQ 渲染队列已就绪（已自动唤起 MRQ 面板）】\n\n"
+            f"【Shot {shot} 场景分层与 MRQ 渲染队列已就绪（已加入 MRQ 队列）】\n\n"
             f"• 时间线帧区间: {start_f:04d} ~ {end_f_inc:04d} (共 {end_f_inc - start_f + 1} 帧)\n"
             f"• 雾气与保底预设: CVar_HeightFog_Only / CVar_EasyFog_Only / CVar_Default_Restore (均严格只含 4 个 ShowFlag 参数)\n"
             f"• 输出版本策略: {ver_mode_str}\n"
@@ -1780,10 +1985,11 @@ def _create_social_icon_pill(parent, platform_type, label_text, on_click_cmd, bg
 
 
 # =========================================================================
-# 大厂工业级深色卡片 UI 主面板 (v5.1 Studio Pro)
+# 大厂工业级深色卡片 UI 主面板 (v5.3 Studio Pro)
 # =========================================================================
 def show_render_layer_dialog():
     import tkinter as tk
+    from tkinter import filedialog
 
     try:
         ctypes.windll.shcore.SetProcessDpiAwareness(1)
@@ -1791,7 +1997,8 @@ def show_render_layer_dialog():
         pass
 
     existing_win = getattr(sys, "_LL_RENDER_TK_WIN", None)
-    if existing_win is not None:
+    existing_ver = getattr(sys, "_LL_RENDER_WIN_VER", "")
+    if existing_win is not None and existing_ver == TOOL_VERSION_TAG:
         try:
             if existing_win.winfo_exists():
                 existing_win.deiconify()
@@ -1835,7 +2042,8 @@ def show_render_layer_dialog():
 
     win = tk.Tk()
     sys._LL_RENDER_TK_WIN = win
-    win.title(f"UE5 Render Layer & MRQ Pipeline Center  —  v5.1 Studio Pro  |  By {AUTHOR_NAME}")
+    sys._LL_RENDER_WIN_VER = TOOL_VERSION_TAG
+    win.title(f"UE5 Render Layer & MRQ Pipeline Center  —  v{TOOL_VERSION_TAG} Studio Pro  |  By {AUTHOR_NAME}")
     win.configure(bg=C_BG_MAIN)
     win.attributes('-topmost', True)
     win.resizable(True, True)
@@ -1864,6 +2072,7 @@ def show_render_layer_dialog():
     prefix_var = tk.StringVar(master=win, value="night_")
     light_dir_var = tk.StringVar(master=win, value=def_light_dir)
     topmost_var = tk.BooleanVar(master=win, value=True)
+    linked_ue_dir_var = tk.StringVar(master=win, value="")
 
     # ----------------- 顶部 Header 与镜头上下文仪表盘 -----------------
     header_bar = tk.Frame(win, bg="#0E1013", highlightbackground=C_CARD_BORDER, highlightthickness=1, padx=16, pady=10)
@@ -1884,7 +2093,7 @@ def show_render_layer_dialog():
         font=(FONT_UI, 8)
     ).pack(side="right", padx=(10, 0))
 
-    tk.Label(title_row, text=" STUDIO PRO v5.1 ", fg="#0E1013", bg=C_ACCENT_CYAN, font=(FONT_MONO, 8, "bold"), padx=6, pady=1).pack(side="right")
+    tk.Label(title_row, text=f" STUDIO PRO v{TOOL_VERSION_TAG} ", fg="#0E1013", bg=C_ACCENT_CYAN, font=(FONT_MONO, 8, "bold"), padx=6, pady=1).pack(side="right")
 
     ctx_row = tk.Frame(header_bar, bg="#161920", highlightbackground="#252A34", highlightthickness=1, padx=12, pady=6)
     ctx_row.pack(fill="x")
@@ -1897,7 +2106,46 @@ def show_render_layer_dialog():
     lbl_frame_badge = tk.Label(ctx_row, text="", fg=C_ACCENT_CYAN, bg="#101216", font=(FONT_MONO, 9, "bold"), padx=10, pady=2)
     lbl_frame_badge.pack(side="left", padx=(6, 12))
 
-    def _update_seq_badges(seq_obj, sf, ef_inc):
+    # 用于更新 02 区联动输出目录状态的引用
+    lbl_link_badge_ref = [None]
+    ent_link_dir_ref = [None]
+
+    def _sync_shot_linked_output_path(seq_obj, prompt_if_missing=False):
+        if not seq_obj:
+            linked_ue_dir_var.set("")
+            if lbl_link_badge_ref[0]:
+                lbl_link_badge_ref[0].config(text="● 待选镜头", fg=C_TEXT_MUTED)
+            return
+
+        ep, shot = pipe.parse_ep_and_shot_from_seq(seq_obj)
+        detected_u = pipe.detect_linked_ue_output_root(ep, shot, master_seq=seq_obj)
+        if detected_u:
+            linked_ue_dir_var.set(detected_u)
+            if lbl_link_badge_ref[0]:
+                lbl_link_badge_ref[0].config(text="● 已联动", fg=C_ACCENT_GREEN)
+            if ent_link_dir_ref[0]:
+                ent_link_dir_ref[0].config(fg=C_ACCENT_GREEN)
+        else:
+            linked_ue_dir_var.set("")
+            if lbl_link_badge_ref[0]:
+                lbl_link_badge_ref[0].config(text="● 未绑定", fg=C_ACCENT_RED)
+            if ent_link_dir_ref[0]:
+                ent_link_dir_ref[0].config(fg=C_ACCENT_RED)
+            if prompt_if_missing:
+                chosen = filedialog.askdirectory(
+                    parent=win,
+                    title=f"未检测到 Shot {shot} 的相机联动路径，请指定一次 ue 输出目录 (指定后将自动永久保存)"
+                )
+                if chosen:
+                    norm_c = os.path.normpath(chosen).replace('\\', '/')
+                    pipe.save_linked_ue_output_root(ep, shot, norm_c)
+                    linked_ue_dir_var.set(norm_c)
+                    if lbl_link_badge_ref[0]:
+                        lbl_link_badge_ref[0].config(text="● 已绑定", fg=C_ACCENT_GREEN)
+                    if ent_link_dir_ref[0]:
+                        ent_link_dir_ref[0].config(fg=C_ACCENT_GREEN)
+
+    def _update_seq_badges(seq_obj, sf, ef_inc, prompt_missing_path=False):
         if seq_obj and sf is not None and ef_inc is not None:
             total_len = ef_inc - sf + 1
             lbl_seq_badge.config(text=f"● {seq_obj.get_name()}", fg=C_ACCENT_GREEN)
@@ -1905,8 +2153,7 @@ def show_render_layer_dialog():
         else:
             lbl_seq_badge.config(text="● 未打开母版序列 (请从右侧选择)", fg=C_ACCENT_RED)
             lbl_frame_badge.config(text="---- ~ ----", fg=C_TEXT_MUTED)
-
-    _update_seq_badges(master_seq, start_f, end_f_inc)
+        _sync_shot_linked_output_path(seq_obj, prompt_if_missing=prompt_missing_path)
 
     def _select_and_open_seq_by_path(seq_pkg_path):
         nonlocal master_seq, start_f, end_f_inc
@@ -1918,7 +2165,7 @@ def show_render_layer_dialog():
                 except Exception:
                     pass
                 start_f, end_f_inc, _ = pipe.get_exact_timeline_range(master_seq)
-                _update_seq_badges(master_seq, start_f, end_f_inc)
+                _update_seq_badges(master_seq, start_f, end_f_inc, prompt_missing_path=True)
 
     def _refresh_master_seq(allow_cb=True):
         nonlocal master_seq, start_f, end_f_inc
@@ -1929,10 +2176,10 @@ def show_render_layer_dialog():
             except Exception:
                 pass
         start_f, end_f_inc, _ = pipe.get_exact_timeline_range(master_seq)
-        _update_seq_badges(master_seq, start_f, end_f_inc)
+        _update_seq_badges(master_seq, start_f, end_f_inc, prompt_missing_path=True)
 
     def _open_current_output_dir():
-        out_d = _extract_output_dir_from_active_queue()
+        out_d = _extract_output_dir_from_active_queue() or linked_ue_dir_var.get().strip()
         if not open_folder_in_explorer(out_d):
             _PopupToplevelMessage(win, "提示", "当前尚未生成输出目录或队列为空！请先点击底部绿色按钮生成队列。")
 
@@ -1970,7 +2217,7 @@ def show_render_layer_dialog():
     _populate_seq_menu()
     mb_seq.pack(side="right", padx=4)
 
-    # ----------------- 第一区：01 分层渲染模式 + 02 版本策略双卡片 -----------------
+    # ----------------- 第一区：01 分层渲染模式 + 02 版本策略与联动输出路径双卡片 -----------------
     row1_container = tk.Frame(win, bg=C_BG_MAIN)
     row1_container.pack(fill="x", padx=14, pady=4)
     row1_container.columnconfigure(0, weight=3)
@@ -2016,7 +2263,7 @@ def show_render_layer_dialog():
 
     hdr_ver = tk.Frame(card_ver, bg=C_CARD_HEADER, padx=12, pady=6)
     hdr_ver.pack(fill="x")
-    tk.Label(hdr_ver, text="02  |  输出版本策略 (VERSIONING)", fg=C_ACCENT_AMBER, bg=C_CARD_HEADER, font=(FONT_UI, 9, "bold")).pack(side="left")
+    tk.Label(hdr_ver, text="02  |  输出版本策略与相机路径联动", fg=C_ACCENT_AMBER, bg=C_CARD_HEADER, font=(FONT_UI, 9, "bold")).pack(side="left")
     tk.Label(hdr_ver, text="跑完自动弹出目录", fg=C_ACCENT_GREEN, bg=C_CARD_HEADER, font=(FONT_UI, 8, "bold")).pack(side="right")
 
     body_ver = tk.Frame(card_ver, bg=C_CARD_BG, padx=14, pady=8)
@@ -2028,7 +2275,7 @@ def show_render_layer_dialog():
         variable=inc_ver_var, value=True,
         fg=C_ACCENT_GREEN, bg=C_CARD_BG, selectcolor=C_INPUT_BG, activebackground=C_CARD_BG, activeforeground=C_ACCENT_GREEN,
         font=(FONT_UI, 9, "bold")
-    ).pack(anchor="w", pady=3)
+    ).pack(anchor="w", pady=1)
 
     tk.Radiobutton(
         body_ver,
@@ -2036,9 +2283,46 @@ def show_render_layer_dialog():
         variable=inc_ver_var, value=False,
         fg=C_TEXT_MAIN, bg=C_CARD_BG, selectcolor=C_INPUT_BG, activebackground=C_CARD_BG, activeforeground=C_ACCENT_AMBER,
         font=(FONT_UI, 9)
-    ).pack(anchor="w", pady=3)
+    ).pack(anchor="w", pady=1)
 
-    tk.Label(body_ver, text="输出规范: .../epXX/shot/ue/publish/vXXX/render", fg=C_TEXT_MUTED, bg=C_CARD_BG, font=(FONT_MONO, 8)).pack(anchor="w", pady=(4, 0))
+    # 联动输出目录显示与手动指定条
+    link_row = tk.Frame(body_ver, bg=C_CARD_BG)
+    link_row.pack(fill="x", pady=(4, 0))
+
+    lbl_link_badge = tk.Label(link_row, text="● 检测中", fg=C_ACCENT_GREEN, bg=C_INPUT_BG, font=(FONT_UI, 8, "bold"), padx=6, pady=2)
+    lbl_link_badge.pack(side="left", padx=(0, 4))
+    lbl_link_badge_ref[0] = lbl_link_badge
+
+    ent_link_dir = tk.Entry(
+        link_row, textvariable=linked_ue_dir_var, bg=C_INPUT_BG, fg=C_ACCENT_GREEN,
+        insertbackground="#FFFFFF", relief="flat", highlightbackground=C_INPUT_BORDER, highlightthickness=1,
+        font=(FONT_MONO, 8)
+    )
+    ent_link_dir.pack(side="left", fill="x", expand=True, padx=2, ipady=2)
+    ent_link_dir_ref[0] = ent_link_dir
+
+    def _on_browse_ue_output_dir():
+        ep, shot = pipe.parse_ep_and_shot_from_seq(master_seq) if master_seq else ("EP01", "1001")
+        chosen = filedialog.askdirectory(
+            parent=win,
+            title=f"请指定 Shot {shot} 的 ue 输出根目录 (如 X:/.../ep28/{shot}/ue)"
+        )
+        if chosen:
+            norm_c = os.path.normpath(chosen).replace('\\', '/')
+            linked_ue_dir_var.set(norm_c)
+            pipe.save_linked_ue_output_root(ep, shot, norm_c)
+            lbl_link_badge.config(text="● 已绑定", fg=C_ACCENT_GREEN)
+            ent_link_dir.config(fg=C_ACCENT_GREEN)
+
+    btn_browse_out = tk.Button(
+        link_row, text="指定目录", command=_on_browse_ue_output_dir,
+        bg=C_BTN_DARK, fg=C_ACCENT_CYAN, relief="flat", bd=0, font=(FONT_UI, 8, "bold"), padx=8, pady=2, cursor="hand2"
+    )
+    btn_browse_out.pack(side="right", padx=(4, 0))
+    _bind_hover(btn_browse_out, C_BTN_DARK, C_BTN_HOVER)
+
+    # 初始化顶部徽章与联动路径状态
+    _update_seq_badges(master_seq, start_f, end_f_inc, prompt_missing_path=False)
 
     # ----------------- 第二区：03 子关卡映射与一键拆层矩阵 -----------------
     card_lvl = tk.Frame(win, bg=C_CARD_BG, highlightbackground=C_CARD_BORDER, highlightthickness=1)
@@ -2388,39 +2672,51 @@ def show_render_layer_dialog():
         return res
 
     def _on_split_and_queue():
-        ui_presets = _collect_ui_preset_paths()
-        sel_mode = mode_var.get()
-        use_emiss = bool(emiss_var.get())
-        use_inc = bool(inc_ver_var.get())
-        sub_map = _collect_sublevel_map()
-        cur_seq_path = master_seq.get_path_name().split('.')[0] if master_seq else ""
-        win.attributes('-topmost', False)
-        topmost_var.set(False)
-        ok, msg = pipe.execute_layer_split_and_queue(
-            render_mode=sel_mode,
-            master_seq_path=cur_seq_path,
-            create_emiss_layer=use_emiss,
-            auto_increment_version=use_inc,
-            clear_existing_queue=True,
-            custom_sublevel_map=sub_map,
-            explicit_preset_paths=ui_presets
-        )
-        if not ok:
-            _PopupToplevelMessage(win, "执行提示", msg)
+        if getattr(sys, "_LL_IS_EXECUTING_ACTION", False):
+            return
+        sys._LL_IS_EXECUTING_ACTION = True
+        try:
+            ui_presets = _collect_ui_preset_paths()
+            sel_mode = mode_var.get()
+            use_emiss = bool(emiss_var.get())
+            use_inc = bool(inc_ver_var.get())
+            sub_map = _collect_sublevel_map()
+            cur_seq_path = master_seq.get_path_name().split('.')[0] if master_seq else ""
+            custom_out = linked_ue_dir_var.get().strip()
+            ok, msg = pipe.execute_layer_split_and_queue(
+                render_mode=sel_mode,
+                master_seq_path=cur_seq_path,
+                create_emiss_layer=use_emiss,
+                custom_publish_dir=custom_out,
+                auto_increment_version=use_inc,
+                clear_existing_queue=True,
+                custom_sublevel_map=sub_map,
+                explicit_preset_paths=ui_presets
+            )
+            _sync_shot_linked_output_path(master_seq, prompt_if_missing=False)
+            _PopupToplevelMessage(win, "分层入列完成" if ok else "执行提示", msg)
+        finally:
+            sys._LL_IS_EXECUTING_ACTION = False
 
     def _on_requeue_only():
-        ui_presets = _collect_ui_preset_paths()
-        use_inc = bool(inc_ver_var.get())
-        cur_seq_path = master_seq.get_path_name().split('.')[0] if master_seq else ""
-        win.attributes('-topmost', False)
-        topmost_var.set(False)
-        ok, msg = pipe.requeue_existing_sequences(
-            master_seq_path=cur_seq_path,
-            auto_increment_version=use_inc,
-            explicit_preset_paths=ui_presets
-        )
-        if not ok:
-            _PopupToplevelMessage(win, "重新入列提示", msg)
+        if getattr(sys, "_LL_IS_EXECUTING_ACTION", False):
+            return
+        sys._LL_IS_EXECUTING_ACTION = True
+        try:
+            ui_presets = _collect_ui_preset_paths()
+            use_inc = bool(inc_ver_var.get())
+            cur_seq_path = master_seq.get_path_name().split('.')[0] if master_seq else ""
+            custom_out = linked_ue_dir_var.get().strip()
+            ok, msg = pipe.requeue_existing_sequences(
+                master_seq_path=cur_seq_path,
+                custom_publish_dir=custom_out,
+                auto_increment_version=use_inc,
+                explicit_preset_paths=ui_presets
+            )
+            _sync_shot_linked_output_path(master_seq, prompt_if_missing=False)
+            _PopupToplevelMessage(win, "重新入列完成" if ok else "重新入列提示", msg)
+        finally:
+            sys._LL_IS_EXECUTING_ACTION = False
 
     def _on_open_mrq_only():
         win.attributes('-topmost', False)
@@ -2436,7 +2732,7 @@ def show_render_layer_dialog():
 
     btn_main_build = tk.Button(
         btn_bar,
-        text="1. 生成分层序列并弹出 MRQ 队列",
+        text="1. 生成分层序列并加入 MRQ 队列",
         command=_on_split_and_queue,
         bg="#107C41", fg="#FFFFFF", activebackground="#159650", activeforeground="#FFFFFF",
         font=(FONT_UI, 10, "bold"), relief="flat", bd=0, pady=8, cursor="hand2"
@@ -2537,7 +2833,16 @@ def show_render_layer_dialog():
     win.geometry(f"{req_w}x{req_h}+{pos_x}+{pos_y}")
     win.minsize(req_w, req_h)
 
+    # ★ 启动后若已打开母版镜头但尚未联动到输出目录，立即主动检测并提醒用户指定一次（永久记住）
+    if master_seq and not linked_ue_dir_var.get().strip():
+        win.after(200, lambda: _sync_shot_linked_output_path(master_seq, prompt_if_missing=True))
+
+    sys._LL_TK_PUMPING_LOCK = False
+    sys._LL_IS_EXECUTING_ACTION = False
+
     def _slate_tick_pump(delta_time):
+        if getattr(sys, "_LL_TK_PUMPING_LOCK", False) or getattr(sys, "_LL_IS_EXECUTING_ACTION", False):
+            return
         cur_win = getattr(sys, "_LL_RENDER_TK_WIN", None)
         cur_tick = getattr(sys, "_LL_RENDER_TICK_HANDLE", None)
         if cur_win is None:
@@ -2548,6 +2853,7 @@ def show_render_layer_dialog():
                     pass
                 sys._LL_RENDER_TICK_HANDLE = None
             return
+        sys._LL_TK_PUMPING_LOCK = True
         try:
             if cur_win.winfo_exists():
                 cur_win.update_idletasks()
@@ -2556,6 +2862,8 @@ def show_render_layer_dialog():
                 sys._LL_RENDER_TK_WIN = None
         except Exception:
             sys._LL_RENDER_TK_WIN = None
+        finally:
+            sys._LL_TK_PUMPING_LOCK = False
 
     sys._LL_RENDER_TICK_HANDLE = unreal.register_slate_post_tick_callback(_slate_tick_pump)
 
