@@ -925,24 +925,13 @@ class UERenderLayerPipeline(object):
         self.save_config(cfg)
 
     # =========================================================================
-    # 3. 完整保留原版 CVarPresets 4 参数清洗逻辑 (修复空指针崩溃 + 严格只留 4 个参数)
+    # 3. CVarPresets 4 参数校验与写入逻辑 (修复 SharedPointer.h:1113 崩溃 + 确保雾气参数完整)
     # =========================================================================
     def _get_existing_command_names_in_asset(self, asset_obj, cvar_lib=None):
+        """直接从 ConsoleVariablesAsset 本体读取命令名，避免 get_list_of_commands_from_preset 元组解析错误"""
         cmd_names = []
         if not asset_obj:
             return cmd_names
-
-        if cvar_lib and hasattr(cvar_lib, "get_list_of_commands_from_preset"):
-            try:
-                raw_list = cvar_lib.get_list_of_commands_from_preset(asset_obj) or []
-                for item in raw_list:
-                    parts = str(item).strip().split()
-                    if parts:
-                        k = parts[0]
-                        if k and k not in cmd_names:
-                            cmd_names.append(k)
-            except Exception:
-                pass
 
         if hasattr(asset_obj, "get_saved_commands_as_string_array"):
             try:
@@ -959,29 +948,37 @@ class UERenderLayerPipeline(object):
         return cmd_names
 
     def _is_cvar_asset_exact_match(self, asset_obj, expected_dict, cvar_lib=None):
-        """严格校验资产内是否【只有】指定的 4 个参数，且每个参数的数值也完全一致"""
-        if not asset_obj:
-            return False
-        cmd_names = self._get_existing_command_names_in_asset(asset_obj, cvar_lib)
-        if len(cmd_names) != len(expected_dict) or set(cmd_names) != set(expected_dict.keys()):
+        """严格校验资产内是否【只有】指定的 4 个雾气参数，且每个参数的数值完全一致"""
+        if not asset_obj or not hasattr(asset_obj, "get_saved_commands_as_string_array"):
             return False
 
-        if hasattr(asset_obj, "get_saved_commands_as_string_array"):
-            try:
-                arr = asset_obj.get_saved_commands_as_string_array(False) or []
-                if len(arr) != len(expected_dict):
-                    return False
-                parsed_map = {}
-                for s in arr:
-                    parts = str(s).strip().split()
-                    if len(parts) >= 2:
-                        parsed_map[parts[0]] = parts[1]
-                for k, v in expected_dict.items():
-                    if parsed_map.get(k) != str(v):
-                        return False
-            except Exception:
+        try:
+            arr = asset_obj.get_saved_commands_as_string_array(False) or []
+            if len(arr) != len(expected_dict):
                 return False
-        return True
+
+            parsed_map = {}
+            for s in arr:
+                parts = str(s).strip().split()
+                if len(parts) >= 2:
+                    parsed_map[parts[0]] = parts[1]
+
+            if set(parsed_map.keys()) != set(expected_dict.keys()):
+                return False
+
+            for k, v in expected_dict.items():
+                raw_val = parsed_map.get(k)
+                if raw_val is None:
+                    return False
+                try:
+                    if int(float(raw_val)) != int(v):
+                        return False
+                except Exception:
+                    if str(raw_val).strip() != str(v).strip():
+                        return False
+            return True
+        except Exception:
+            return False
 
     def get_or_create_cvar_presets(self):
         cvar_cls = getattr(unreal, "ConsoleVariablesAsset", None)
@@ -1020,20 +1017,28 @@ class UERenderLayerPipeline(object):
             if not asset_obj:
                 continue
 
+            # 若资产内已经精确包含这 4 个雾气参数与对应数值，直接复用，不触碰 cvar_lib（不弹窗也绝不崩溃）
             is_clean_and_exact = self._is_cvar_asset_exact_match(asset_obj, cvar_dict, cvar_lib)
 
             if not is_clean_and_exact and cvar_lib:
                 try:
-                    existing_cmd_names = self._get_existing_command_names_in_asset(asset_obj, cvar_lib)
+                    existing_cmd_names = self._get_existing_command_names_in_asset(asset_obj)
 
-                    # 1. 先把当前 CVar 编辑器内存列表同步到 asset_obj 以提取所有潜在污染变量名
-                    if hasattr(cvar_lib, "copy_current_list_to_asset"):
-                        cvar_lib.copy_current_list_to_asset(asset_obj)
+                    # 1. 先清空 asset_obj 本体保存的旧命令列表
+                    if hasattr(asset_obj, "replace_saved_commands"):
+                        try:
+                            asset_obj.replace_saved_commands([])
+                        except Exception:
+                            pass
 
-                    all_polluted = self._get_existing_command_names_in_asset(asset_obj, cvar_lib)
-                    cmds_to_purge = set(all_polluted) | set(existing_cmd_names) | set(POLLUTED_MRQ_CVARS) | expected_keys_set
+                    # 2. 【核心防崩】先将已清空的 asset_obj 载入 ConsoleVariablesEditor：
+                    #    既初始化 C++ 底层 TSharedPtr 智能指针（100% 根除 SharedPointer.h:1113 崩溃），
+                    #    又用空资产冲掉编辑器内存里残留的 MRQ 画质变量
+                    if hasattr(cvar_lib, "load_preset_into_console_variables_editor"):
+                        cvar_lib.load_preset_into_console_variables_editor(asset_obj)
 
-                    # 2. 清空 CVar 编辑器当前预设列表中的所有旧变量与污染变量
+                    # 3. 兜底清理可能残留在当前预设列表中的污染变量
+                    cmds_to_purge = set(existing_cmd_names) | set(POLLUTED_MRQ_CVARS) | expected_keys_set
                     if hasattr(cvar_lib, "remove_command_from_current_preset"):
                         for bad_cmd in cmds_to_purge:
                             if bad_cmd:
@@ -1042,45 +1047,25 @@ class UERenderLayerPipeline(object):
                                 except Exception:
                                     pass
 
-                    # 同时将 asset_obj 自身的数据清空
-                    if hasattr(asset_obj, "replace_saved_commands"):
-                        try:
-                            asset_obj.replace_saved_commands([])
-                        except Exception:
-                            pass
-
-                    # 3. 严格按官方两步法写入 4 个雾气分层参数：
-                    #    第一步：先通过 set_console_variable_by_name_int 设置变量当前值
-                    #    第二步：调用 add_validated_command_to_current_preset(只传变量名 cv_k！绝不带空格和数值，防止空指针崩溃)
+                    # 4. 逐条写入完整的 4 个雾气参数与数值 (格式: "ShowFlag.xxx 0" 或 "ShowFlag.xxx 2")
                     for cv_k, cv_v in cvar_dict.items():
                         cmd_key = str(cv_k).strip()
                         val_int = int(cv_v)
-                        if hasattr(cvar_lib, "set_console_variable_by_name_int"):
-                            cvar_lib.set_console_variable_by_name_int(cmd_key, val_int)
-                        elif hasattr(cvar_lib, "set_console_variable_by_name_string"):
-                            cvar_lib.set_console_variable_by_name_string(cmd_key, str(val_int))
-
                         if hasattr(cvar_lib, "add_validated_command_to_current_preset"):
-                            cvar_lib.add_validated_command_to_current_preset(cmd_key)
+                            cvar_lib.add_validated_command_to_current_preset(f"{cmd_key} {val_int}")
 
-                    # 4. 将只含 4 个参数的列表拷贝写入 asset_obj
+                    # 5. 将只含 4 个雾气参数的列表写回 asset_obj
                     if hasattr(cvar_lib, "copy_current_list_to_asset"):
                         cvar_lib.copy_current_list_to_asset(asset_obj)
 
-                    # 5. 二次白名单强校验：直接从 asset_obj 本体剔除任何非 4 个 ShowFlag 的残留项
-                    final_cmds = self._get_existing_command_names_in_asset(asset_obj, cvar_lib)
+                    # 6. 白名单复核：剔除任何非 4 个 ShowFlag 的残留项
+                    final_cmds = self._get_existing_command_names_in_asset(asset_obj)
                     for cmd_n in final_cmds:
-                        if cmd_n not in expected_keys_set:
-                            if hasattr(asset_obj, "remove_console_variable"):
-                                try:
-                                    asset_obj.remove_console_variable(str(cmd_n).strip())
-                                except Exception:
-                                    pass
-                            if hasattr(cvar_lib, "remove_command_from_current_preset"):
-                                try:
-                                    cvar_lib.remove_command_from_current_preset(str(cmd_n).strip())
-                                except Exception:
-                                    pass
+                        if cmd_n not in expected_keys_set and hasattr(asset_obj, "remove_console_variable"):
+                            try:
+                                asset_obj.remove_console_variable(str(cmd_n).strip())
+                            except Exception:
+                                pass
 
                     if hasattr(asset_obj, "set_variable_collection_description"):
                         desc_str = ", ".join([f"{k}={v}" for k, v in cvar_dict.items()])
@@ -1093,7 +1078,7 @@ class UERenderLayerPipeline(object):
 
             created_assets[key] = asset_obj
 
-        # 6. 结束后将当前编辑器视口的 4 个 ShowFlag 还原为默认状态 (2)
+        # 7. 结束后将当前编辑器视口的 4 个 ShowFlag 还原为默认状态 (2)
         if any_written:
             try:
                 world = unreal.EditorLevelLibrary.get_editor_world()
