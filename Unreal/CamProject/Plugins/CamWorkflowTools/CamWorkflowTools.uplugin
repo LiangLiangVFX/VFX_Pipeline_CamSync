@@ -1,22 +1,51 @@
 {
-    "FileVersion": 3,
-    "Version": 1,
-    "VersionName": "1.0.0",
-    "FriendlyName": "Cam Workflow Tools",
-    "Description": "Maya 相机资产自动化组装工具集",
-    "Category": "Cinematics",
-    "CreatedBy": "LiangLiangArtist",
-    "CanContainContent": true,
-    "IsBetaVersion": false,
-    "Installed": false,
-    "Plugins": [
-        {
-            "Name": "PythonScriptPlugin",
-            "Enabled": true
-        },
-        {
-            "Name": "EditorScriptingUtilities",
-            "Enabled": true
-        }
-    ]
+	"FileVersion": 3,
+	"Version": 1,
+	"VersionName": "5.8",
+	"FriendlyName": "CamWorkflowTools",
+	"Description": "UE5 Camera & Render Layer Pipeline Suite",
+	"Category": "VFX Pipeline",
+	"CreatedBy": "LiangLiangArtist",
+	"CreatedByURL": "https://github.com/LiangLiangVFX/VFX_Pipeline_CamSync",
+	"DocsURL": "https://github.com/LiangLiangVFX/VFX_Pipeline_CamSync",
+	"MarketplaceURL": "https://github.com/LiangLiangVFX/VFX_Pipeline_CamSync",
+	"CanContainContent": true,
+	"IsBetaVersion": false,
+	"IsExperimentalVersion": false,
+	"Installed": false,
+	"EnabledByDefault": true,
+	"Plugins": [
+		{
+			"Name": "PythonScriptPlugin",
+			"Enabled": true
+		},
+		{
+			"Name": "EditorScriptingUtilities",
+			"Enabled": true
+		},
+		{
+			"Name": "SequencerScripting",
+			"Enabled": true
+		},
+		{
+			"Name": "LevelSequenceEditor",
+			"Enabled": true
+		},
+		{
+			"Name": "MovieRenderPipeline",
+			"Enabled": true
+		},
+		{
+			"Name": "AppleProResMedia",
+			"Enabled": true
+		},
+		{
+			"Name": "ImagePlate",
+			"Enabled": true
+		},
+		{
+			"Name": "ConsoleVariables",
+			"Enabled": true
+		}
+	]
 }

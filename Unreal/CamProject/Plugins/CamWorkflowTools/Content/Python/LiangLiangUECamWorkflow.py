@@ -373,6 +373,9 @@ class UECamWorkflowPipeline(object):
 
             shared_media_tex, shared_mat = self.get_or_create_shared_media_suite(user_root_path)
 
+            for old_tr in list(level_seq.get_tracks()):
+                if isinstance(old_tr, unreal.MovieSceneMediaTrack):
+                    level_seq.remove_track(old_tr)
             media_track = level_seq.add_track(unreal.MovieSceneMediaTrack)
             if media_track:
                 media_section = media_track.add_section()
@@ -404,23 +407,82 @@ class UECamWorkflowPipeline(object):
         ep = custom_ep.strip() if custom_ep.strip() else ep_det
         self.save_root_dir(user_root_path, shot_key=f"{ep}_{shot}", fbx_disk_path=clean_fbx)
 
-        # 2. 目录与 Level Sequence 创建
+      # 2. 目录与 Level Sequence 创建 (若为重复导入，先安全清理旧 Actor 与红字失效绑定，只留唯一一版)
         target_folder = f"{user_root_path.rstrip('/')}/{ep}/Shot_{shot}"
         seq_name = f"{ep.lower()}_cam{shot}"
         seq_asset_path = f"{target_folder}/{seq_name}"
 
         asset_sub = unreal.get_editor_subsystem(unreal.EditorAssetSubsystem)
+        actor_sub = unreal.get_editor_subsystem(unreal.EditorActorSubsystem)
         if not asset_sub.does_directory_exist(target_folder):
             asset_sub.make_directory(target_folder)
 
         asset_tools = unreal.AssetToolsHelpers.get_asset_tools()
         if asset_sub.does_asset_exist(seq_asset_path):
             level_seq = asset_sub.load_asset(seq_asset_path)
+
+            # A. 先在打开状态下通过正确的 b.get_id() 收集旧序列绑定的 Actor
+            actors_to_destroy = []
+            try:
+                unreal.LevelSequenceEditorBlueprintLibrary.open_level_sequence(level_seq)
+                for b in list(level_seq.get_bindings()):
+                    try:
+                        for bound_obj in unreal.LevelSequenceEditorBlueprintLibrary.get_bound_objects(b.get_id()):
+                            if isinstance(bound_obj, unreal.Actor) and bound_obj not in actors_to_destroy:
+                                actors_to_destroy.append(bound_obj)
+                    except Exception:
+                        pass
+            except Exception:
+                pass
+
+            # B. 【防崩核心】先关闭 Sequencer 面板，再执行轨道/绑定移除与 Actor 销毁
+            try:
+                unreal.LevelSequenceEditorBlueprintLibrary.close_level_sequence()
+            except Exception:
+                pass
+
+            # C. 彻底清空旧序列中的所有主轨道 (CameraCut / Media 等)
+            for tr in list(level_seq.get_tracks()):
+                try:
+                    level_seq.remove_track(tr)
+                except Exception:
+                    pass
+
+            # D. 分两轮彻底移除所有子组件绑定与父级绑定 (彻底消除变红的失效轨道)
+            for _ in range(2):
+                for b in list(level_seq.get_bindings()):
+                    try:
+                        b.remove()
+                    except Exception:
+                        pass
+
+            # E. 收集并销毁大纲中属于当前镜头号 (shot) 的同名旧辅助 Actor 与旧相机
+            target_labels = {f"shot_root_{shot}".lower(), f"imageplate_{shot}".lower(), f"sm_ref_{shot}".lower()}
+            for act in actor_sub.get_all_level_actors():
+                if not act or act in actors_to_destroy:
+                    continue
+                try:
+                    lbl_low = act.get_actor_label().lower()
+                    folder_low = str(act.get_folder_path()).lower() if hasattr(act, "get_folder_path") else ""
+                    if lbl_low in target_labels:
+                        actors_to_destroy.append(act)
+                    elif isinstance(act, unreal.CineCameraActor) and str(shot).lower() in lbl_low and "!cam" in folder_low:
+                        actors_to_destroy.append(act)
+                except Exception:
+                    pass
+
+            for old_act in actors_to_destroy:
+                try:
+                    actor_sub.destroy_actor(old_act)
+                except Exception:
+                    pass
+
+           # F. 清理完毕后重新打开干净的序列
+            unreal.LevelSequenceEditorBlueprintLibrary.open_level_sequence(level_seq)
         else:
             factory = unreal.LevelSequenceFactoryNew()
             level_seq = asset_tools.create_asset(seq_name, target_folder, unreal.LevelSequence, factory)
-
-        unreal.LevelSequenceEditorBlueprintLibrary.open_level_sequence(level_seq)
+            unreal.LevelSequenceEditorBlueprintLibrary.open_level_sequence(level_seq)
 
         fps_int = int(round(float(fps_val)))
         level_seq.set_display_rate(unreal.FrameRate(numerator=fps_int, denominator=1))

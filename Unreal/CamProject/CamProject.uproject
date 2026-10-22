@@ -29,6 +29,11 @@
 		{
 			"Name": "MoviePipelineMaskRenderPass",
 			"Enabled": true
+		},
+		{
+			"Name": "CamWorkflowTools",
+			"Enabled": true,
+			"MarketplaceURL": "https://github.com/LiangLiangVFX/VFX_Pipeline_CamSync"
 		}
 	]
 }

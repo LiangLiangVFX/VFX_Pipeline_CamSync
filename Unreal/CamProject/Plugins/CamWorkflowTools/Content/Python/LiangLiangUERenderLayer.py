@@ -1004,15 +1004,33 @@ class UERenderLayerPipeline(object):
 
         for key, asset_name, cvar_dict in specs:
             pkg_path = f"{target_folder}/{asset_name}"
+            plugin_cvar_path = f"/CamWorkflowTools/CVarPresets/{asset_name}"
+            asset_obj = None
+
+            # 1. 优先加载工程目录已有的 CVar 预设
             if self.asset_sub.does_asset_exist(pkg_path):
                 asset_obj = self.asset_sub.load_asset(pkg_path)
-            elif cvar_factory_cls:
+
+            # 2. 若工程目录尚无该资产，优先从插件内置目录 (/CamWorkflowTools/CVarPresets) 直接复制或加载（零崩溃）
+            if not asset_obj and self.asset_sub.does_asset_exist(plugin_cvar_path):
+                try:
+                    asset_obj = self.asset_sub.duplicate_asset(plugin_cvar_path, pkg_path)
+                    if asset_obj:
+                        self.asset_sub.save_asset(pkg_path, only_if_is_dirty=False)
+                except Exception:
+                    pass
+                if not asset_obj:
+                    asset_obj = self.asset_sub.load_asset(plugin_cvar_path)
+                if asset_obj:
+                    created_assets[key] = asset_obj
+                    continue
+
+            # 3. 兜底：若插件目录也未找到，才动态新建
+            if not asset_obj and cvar_factory_cls:
                 try:
                     asset_obj = self.asset_tools.create_asset(asset_name, target_folder, cvar_cls, cvar_factory_cls())
                 except Exception:
                     asset_obj = None
-            else:
-                asset_obj = None
 
             if not asset_obj:
                 continue
@@ -1290,6 +1308,16 @@ class UERenderLayerPipeline(object):
         cfg = self.load_config()
         all_cand_paths = self.list_all_mrq_config_assets()
 
+        # 插件内置的三大标准预设路径 (Plugins/CamWorkflowTools/Content/RenderConfig)
+        plugin_default_presets = {
+            "beauty":      "/CamWorkflowTools/RenderConfig/AOV_RenderSet",
+            "id_actor":    "/CamWorkflowTools/RenderConfig/AOV_RenderSet_ID_ACTOR",
+            "id_material": "/CamWorkflowTools/RenderConfig/AOV_RenderSet_ID_Material",
+        }
+        for def_p in plugin_default_presets.values():
+            if self.asset_sub.does_asset_exist(def_p) and def_p not in all_cand_paths:
+                all_cand_paths.insert(0, def_p)
+
         presets = {
             "beauty": None,
             "id_actor": None,
@@ -1315,16 +1343,26 @@ class UERenderLayerPipeline(object):
         saved_presets = {} if force_rescan else dict(cfg.get("mrq_preset_paths", {}))
 
         for k in ["beauty", "id_actor", "id_material"]:
+            # 1. 若本地已有有效配置且资产存在，则优先使用
             if not force_rescan and has_saved_dict and k in saved_presets:
                 sp = str(saved_presets.get(k, "")).strip()
                 if sp and sp.startswith("/") and self.asset_sub.does_asset_exist(sp):
                     presets[k] = self.asset_sub.load_asset(sp)
-                else:
-                    presets[k] = None
-            else:
+
+            # 2. 若未绑定或换了新工程原路径不存在，优先绑定插件内置的 /CamWorkflowTools/RenderConfig 预设
+            if presets[k] is None:
+                plug_p = plugin_default_presets.get(k, "")
+                if plug_p and self.asset_sub.does_asset_exist(plug_p):
+                    loaded = self.asset_sub.load_asset(plug_p)
+                    if loaded:
+                        presets[k] = loaded
+                        saved_presets[k] = plug_p
+
+            # 3. 若插件默认名微调，则在扫描到的全部候选中按名称自动匹配
+            if presets[k] is None:
                 for pkg_p in all_cand_paths:
                     role_k = self._classify_preset_key_by_name(pkg_p)
-                    if role_k == k and presets[k] is None:
+                    if role_k == k:
                         loaded = self.asset_sub.load_asset(pkg_p)
                         if loaded:
                             presets[k] = loaded
