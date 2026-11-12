@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 import os
 import sys
+import subprocess
 import importlib
 import nuke
 
@@ -47,6 +48,39 @@ def _get_builtin_icon(candidates, fallback="Roto.png"):
 
 
 # =============================================================================
+# 新增功能：一键打开当前工程所在文件夹并高亮选中 .nk 文件
+# =============================================================================
+def open_current_script_folder():
+    script_path = nuke.root().name()
+    if not script_path or script_path == "Root":
+        nuke.message("⚠️ 当前工程尚未保存，请先打开或保存一个 .nk 工程文件！")
+        return
+
+    norm_path = os.path.normpath(script_path)
+    folder_path = os.path.dirname(norm_path)
+
+    if not os.path.exists(folder_path):
+        nuke.message(f"⚠️ 找不到工程所在目录：\n{folder_path}")
+        return
+
+    try:
+        if os.name == 'nt':
+            # Windows: 打开资源管理器并自动高亮选中当前 .nk 文件
+            if os.path.exists(norm_path):
+                subprocess.Popen(['explorer.exe', '/select,', norm_path])
+            else:
+                os.startfile(folder_path)
+        elif sys.platform == 'darwin':
+            # macOS: 在 Finder 中定位并选中文件
+            subprocess.Popen(['open', '-R', norm_path])
+        else:
+            # Linux
+            subprocess.Popen(['xdg-open', folder_path])
+    except Exception as e:
+        nuke.message(f"打开文件夹失败:\n{e}")
+
+
+# =============================================================================
 # 热重载核心函数 (一键同时刷新 LiangLiangNukeWorkflow.py + 左侧栏 + 顶部菜单栏)
 # =============================================================================
 def reload_liangliang_pipeline():
@@ -82,6 +116,7 @@ def reload_liangliang_pipeline():
 def _populate_ll_menu(menu_obj):
     biref_icon = _get_builtin_icon(["RotoPaint.png", "FilterErode.png", "Keyer.png"], "Roto.png")
     sam2mat_icon = _get_builtin_icon(["Cryptomatte.png", "CameraTracker.png", "SmartVector.png", "Primatte.png"], "Tracker.png")
+    folder_icon = _get_builtin_icon(["Read.png", "Write.png"], "Read.png")
 
     # 功能 1: 实拍预处理 (Keyer 图标)
     menu_obj.addCommand(
@@ -113,8 +148,14 @@ def _populate_ll_menu(menu_obj):
         "LiangLiangNukeWorkflow.show_autocomp_menu()",
         icon="Shuffle.png"
     )
-    # 功能 6: 重新载入管线脚本 (Refresh 图标)
+
+    # 辅助工具区（位于“重新载入管线脚本”正上方）
     menu_obj.addSeparator()
+    menu_obj.addCommand(
+        "打开当前工程所在文件夹",
+        "open_current_script_folder()",
+        icon=folder_icon
+    )
     menu_obj.addCommand(
         "重新载入管线脚本",
         "reload_liangliang_pipeline()",
