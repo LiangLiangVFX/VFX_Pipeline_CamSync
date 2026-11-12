@@ -25,7 +25,11 @@ import shutil
 import ctypes
 import subprocess
 import webbrowser
-import unreal
+
+try:
+    import unreal  # type: ignore[import-not-found]
+except ImportError:
+    unreal = None  # type: ignore[assignment]
 
 TOOL_VERSION_TAG    = "5.8"
 
@@ -2228,15 +2232,15 @@ class _SlateDropdownMenu(object):
         if not self._items:
             return
 
-        C_POP_BG       = "#12151B"
-        C_POP_BORDER   = "#2B3343"
-        C_ITEM_BG      = "#151921"
+        C_POP_BG       = "#13161D"
+        C_POP_BORDER   = "#2E3646"
+        C_ITEM_BG      = "#171B24"
         C_ITEM_HOVER   = "#0A84FF"
-        C_TEXT_NORM    = "#E2E8F0"
+        C_TEXT_NORM    = "#F1F5F9"
         C_TEXT_DIS     = "#526077"
-        C_SEP_LINE     = "#232A36"
+        C_SEP_LINE     = "#232A38"
         C_SB_TROUGH    = "#0D0F14"
-        C_SB_THUMB     = "#2E384D"
+        C_SB_THUMB     = "#323C50"
         C_SB_THUMB_HOV = "#0A84FF"
 
         pop = tk.Toplevel(self.root_win)
@@ -2269,7 +2273,6 @@ class _SlateDropdownMenu(object):
             viewport_h = 296
             cv = tk.Canvas(list_wrap, bg=C_POP_BG, highlightthickness=0, bd=0, height=viewport_h)
 
-            # 右侧 1px 细分割线 + 8px 自绘暗黑滑轨 Canvas
             tk.Frame(list_wrap, bg="#1E2430", width=1).pack(side="right", fill="y", padx=(2, 0))
             sb_cv = tk.Canvas(
                 list_wrap, width=8, height=viewport_h,
@@ -2473,7 +2476,7 @@ def _create_slate_dropdown_button(
 ):
     """
     创建零白框、带 1px 精致微边框与平滑 Hover 过渡的工业级下拉触发按钮 + _SlateDropdownMenu
-    style: "primary" (科技蓝主按钮) | "secondary" (深灰暗色胶囊按钮)
+    style: "primary" (科技蓝焦点主按钮) | "secondary" (深灰金属胶囊按钮)
     """
     import tkinter as tk
 
@@ -2482,15 +2485,15 @@ def _create_slate_dropdown_button(
         bg_hover     = "#2592FF"
         fg_norm      = "#FFFFFF"
         fg_hover     = "#FFFFFF"
-        border_norm  = "#1E90FF"
-        border_hover = "#60A5FA"
+        border_norm  = "#2E9AFE"
+        border_hover = "#7DD3FC"
         arrow_col    = "#E0F2FE"
     else:
-        bg_norm      = "#1F242E"
-        bg_hover     = "#29303E"
+        bg_norm      = "#212631"
+        bg_hover     = "#2B3240"
         fg_norm      = "#E2E8F0"
         fg_hover     = "#FFFFFF"
-        border_norm  = "#2E3646"
+        border_norm  = "#303846"
         border_hover = "#38BDF8"
         arrow_col    = "#38BDF8"
 
@@ -2558,11 +2561,11 @@ def _PopupToplevelMessage(parent_win, title_str, body_str):
             pass
         sys._LL_RENDER_GUIDE_WIN = None
 
-    C_BG_MAIN     = "#111317"
-    C_CARD_BG     = "#181B20"
-    C_CARD_HEADER = "#1E222A"
-    C_CARD_BORDER = "#2A303C"
-    C_TEXT_MAIN   = "#ECEFF4"
+    C_BG_MAIN     = "#0E1015"
+    C_CARD_BG     = "#161A22"
+    C_CARD_HEADER = "#1C212B"
+    C_CARD_BORDER = "#2B3240"
+    C_TEXT_MAIN   = "#F1F5F9"
     C_TEXT_MUTED  = "#64748B"
     C_ACCENT_BLUE = "#0A84FF"
 
@@ -2578,6 +2581,8 @@ def _PopupToplevelMessage(parent_win, title_str, body_str):
         highlightbackground=C_CARD_BORDER, highlightcolor=C_CARD_BORDER, highlightthickness=1
     )
     card.pack(fill="both", expand=True, padx=14, pady=(14, 10))
+
+    tk.Frame(card, bg=C_ACCENT_BLUE, height=2).pack(fill="x")
 
     hdr = tk.Frame(card, bg=C_CARD_HEADER, padx=14, pady=8)
     hdr.pack(fill="x")
@@ -2598,7 +2603,7 @@ def _PopupToplevelMessage(parent_win, title_str, body_str):
 
     txt_lbl = tk.Label(
         body_frame, text=body_str, justify="left", anchor="w",
-        fg="#D8DEE9", bg=C_CARD_BG, font=("Microsoft YaHei UI", 9)
+        fg="#E2E8F0", bg=C_CARD_BG, font=("Microsoft YaHei UI", 9)
     )
     txt_lbl.pack(fill="both", expand=True)
 
@@ -2634,11 +2639,11 @@ def _ask_requeue_version_strategy_popup(parent_win):
 
     result_ref = [None]
 
-    C_BG_MAIN      = "#111317"
-    C_CARD_BG      = "#181B20"
-    C_CARD_HEADER  = "#1E222A"
-    C_CARD_BORDER  = "#2A303C"
-    C_TEXT_MAIN    = "#ECEFF4"
+    C_BG_MAIN      = "#0E1015"
+    C_CARD_BG      = "#161A22"
+    C_CARD_HEADER  = "#1C212B"
+    C_CARD_BORDER  = "#2B3240"
+    C_TEXT_MAIN    = "#F1F5F9"
     C_TEXT_SUB     = "#94A3B8"
     C_TEXT_MUTED   = "#64748B"
     C_ACCENT_BLUE  = "#0A84FF"
@@ -2657,6 +2662,8 @@ def _ask_requeue_version_strategy_popup(parent_win):
         highlightbackground=C_CARD_BORDER, highlightcolor=C_CARD_BORDER, highlightthickness=1
     )
     card.pack(fill="both", expand=True, padx=14, pady=14)
+
+    tk.Frame(card, bg=C_ACCENT_AMBER, height=2).pack(fill="x")
 
     hdr = tk.Frame(card, bg=C_CARD_HEADER, padx=16, pady=9)
     hdr.pack(fill="x")
@@ -2677,8 +2684,8 @@ def _ask_requeue_version_strategy_popup(parent_win):
     body.pack(fill="both", expand=True)
 
     info_box = tk.Frame(
-        body, bg="#14161A",
-        highlightbackground="#242933", highlightcolor="#242933", highlightthickness=1,
+        body, bg="#11141B",
+        highlightbackground="#222834", highlightcolor="#222834", highlightthickness=1,
         padx=14, pady=12
     )
     info_box.pack(fill="x", pady=(0, 16))
@@ -2688,7 +2695,7 @@ def _ask_requeue_version_strategy_popup(parent_win):
         text="• 自动递增版本：若当前版本目录（如 v001）已有渲染图，自动递增新建 v002 / v003（若无图则保持 v001）\n"
              "• 替换当前版本：不删除已有渲染图素材，直接锁定当前版本目录（如 v001），待启动渲染时由 UE 直接覆盖\n"
              "• 多镜头队列隔离：自动保留队列中已添加的其他镜头（如 cam2220），各镜头输出路径独立互不覆盖",
-        justify="left", anchor="w", fg=C_TEXT_SUB, bg="#14161A",
+        justify="left", anchor="w", fg=C_TEXT_SUB, bg="#11141B",
         font=("Microsoft YaHei UI", 9)
     ).pack(anchor="w")
 
@@ -2719,12 +2726,12 @@ def _ask_requeue_version_strategy_popup(parent_win):
 
     btn_cancel = tk.Button(
         btn_row, text="取消", command=lambda: _choose(None),
-        bg="#222731", fg=C_TEXT_SUB, activebackground="#2E3543", activeforeground="#FFFFFF",
+        bg="#222733", fg=C_TEXT_SUB, activebackground="#2E3545", activeforeground="#FFFFFF",
         font=("Microsoft YaHei UI", 9), relief="flat", bd=0, highlightthickness=0, padx=16, pady=8, cursor="hand2"
     )
     btn_cancel.pack(side="right")
-    btn_cancel.bind("<Enter>", lambda e: btn_cancel.config(bg="#2E3543", fg="#FFFFFF"))
-    btn_cancel.bind("<Leave>", lambda e: btn_cancel.config(bg="#222731", fg=C_TEXT_SUB))
+    btn_cancel.bind("<Enter>", lambda e: btn_cancel.config(bg="#2E3545", fg="#FFFFFF"))
+    btn_cancel.bind("<Leave>", lambda e: btn_cancel.config(bg="#222733", fg=C_TEXT_SUB))
 
     dlg.update_idletasks()
     _enable_windows_dark_titlebar_and_pure_icon(dlg)
@@ -2740,10 +2747,10 @@ def _ask_requeue_version_strategy_popup(parent_win):
     return result_ref[0]
 
 
-def _create_social_icon_pill(parent, platform_type, label_text, on_click_cmd, bg_norm="#181B20", bg_hover="#262B35"):
+def _create_social_icon_pill(parent, platform_type, label_text, on_click_cmd, bg_norm="#171B22", bg_hover="#232936"):
     import tkinter as tk
 
-    border_norm = "#2A303C"
+    border_norm = "#262D3B"
     hover_accent = "#19A3D6" if platform_type == "bilibili" else "#0A84FF"
 
     pill = tk.Frame(
@@ -2755,16 +2762,16 @@ def _create_social_icon_pill(parent, platform_type, label_text, on_click_cmd, bg
     cv.pack(side="left", padx=(0, 5))
 
     if platform_type == "github":
-        cv.create_oval(1, 1, 15, 15, fill="#ECEFF4", outline="")
+        cv.create_oval(1, 1, 15, 15, fill="#E2E8F0", outline="")
         cv.create_polygon(3, 5, 5, 2, 7, 5, fill="#111317", outline="")
         cv.create_polygon(9, 5, 11, 2, 13, 5, fill="#111317", outline="")
         cv.create_oval(4, 4, 12, 11, fill="#111317", outline="")
         cv.create_rectangle(6, 10, 10, 15, fill="#111317", outline="")
-        fg_col = "#ECEFF4"
+        fg_col = "#CBD5E1"
     elif platform_type == "youtube":
         cv.create_rectangle(1, 2, 17, 14, fill="#EF4444", outline="#EF4444")
         cv.create_polygon(7, 5, 7, 11, 13, 8, fill="#FFFFFF", outline="")
-        fg_col = "#ECEFF4"
+        fg_col = "#CBD5E1"
     elif platform_type == "bilibili":
         cv.create_line(5, 1, 8, 4, fill="#19a3d6", width=2)
         cv.create_line(13, 1, 10, 4, fill="#19a3d6", width=2)
@@ -2772,7 +2779,7 @@ def _create_social_icon_pill(parent, platform_type, label_text, on_click_cmd, bg
         cv.create_rectangle(4, 6, 14, 12, fill="#111317", outline="")
         cv.create_line(6, 8, 8, 10, fill="#19a3d6", width=2)
         cv.create_line(12, 8, 10, 10, fill="#19a3d6", width=2)
-        fg_col = "#ECEFF4"
+        fg_col = "#CBD5E1"
     else:
         cv.create_rectangle(1, 3, 16, 13, fill="#111317", outline="#38BDF8", width=1)
         cv.create_line(1, 3, 8, 9, 16, 3, fill="#38BDF8", width=1)
@@ -2800,7 +2807,8 @@ def _create_social_icon_pill(parent, platform_type, label_text, on_click_cmd, bg
 
 
 # =========================================================================
-# 大厂工业级深色卡片 UI 主面板 (v5.8 Studio Pro — Modern DCC Edition)
+# 大厂工业级深色卡片 UI 主面板 (v5.8 Studio Pro — Focal-Point Hierarchy Edition)
+# 设计法则：背景与输入框保持干净克制，5 大核心工作流焦点做强对比高光突出，全局 0.0px 抖动
 # =========================================================================
 def show_render_layer_dialog():
     import time
@@ -2837,27 +2845,34 @@ def show_render_layer_dialog():
     saved_preset_paths = cfg.get("mrq_preset_paths", {})
 
     # =========================================================================
-    # 工业级 DCC 色彩与质感体系 (Design Tokens: UE5 Slate / Linear / Resolve)
+    # 工业级 DCC 视觉重心色彩体系 (Clean Base + High-Contrast Focal Points)
     # =========================================================================
-    C_BG_MAIN       = "#111317"  # 1级：底层主画布暗灰
-    C_DOCK_BG       = "#0D0F12"  # 0级：深邃顶栏/底坞底色
-    C_CARD_BG       = "#181B20"  # 2级：悬浮卡片主体
-    C_CARD_HEADER   = "#1E222A"  # 3级：卡片顶栏 Header
-    C_SUBBAR_BG     = "#15181E"  # 2.5级：卡片内部次级工具条/行容器
-    C_CARD_BORDER   = "#2A303C"  # 1px 超低对比度结构内边框
-    C_DIVIDER       = "#222731"  # 1px 细腻分割线
-    C_INPUT_BG      = "#14161A"  # 输入框下沉底色
-    C_INPUT_BORDER  = "#262C36"  # 输入框静默边框
-    C_TEXT_MAIN     = "#ECEFF4"  # 主信息高对比度亮白
-    C_TEXT_SUB      = "#94A3B8"  # 次级标签冷灰
-    C_TEXT_MUTED    = "#64748B"  # 弱化参数与技术说明
-    C_ACCENT_BLUE   = "#0A84FF"  # 主强调色：低饱和度科技蓝
-    C_ACCENT_CYAN   = "#38BDF8"  # 参数高亮青色
-    C_ACCENT_GREEN  = "#10B981"  # 薄荷绿：成功/已绑定/就绪
-    C_ACCENT_AMBER  = "#F59E0B"  # 琥珀金：警告/核心模块标识
-    C_ACCENT_RED    = "#EF4444"  # 状态警示红
-    C_BTN_DARK      = "#222731"  # 次级按钮常态底色
-    C_BTN_HOVER     = "#2C3342"  # 按钮悬浮提亮底色
+    C_BG_MAIN       = "#0E1015"  # 底层深邃黑曜石画布
+    C_DOCK_BG       = "#11141B"  # 顶栏与底坞座舱底色
+    C_CARD_BG       = "#161A22"  # 悬浮卡片主体色
+    C_CARD_HEADER   = "#1C212C"  # 卡片顶栏 Header
+    C_SUBBAR_BG     = "#12151C"  # 卡片内次级静默行底色
+    C_ACTIVE_ROW_BG = "#162336"  # 01/02 选中态高亮磁贴底色
+    C_CARD_BORDER   = "#262D3B"  # 1px 卡片结构细边框
+    C_DIVIDER       = "#202632"  # 1px 内部精细分割线
+    C_INPUT_BG      = "#0B0D12"  # 输入框下沉底色
+    C_INPUT_BORDER  = "#252C3A"  # 输入框常态边框
+
+    # 文字层级：保持输入框与正文干净清晰，不乱用刺眼彩色字
+    C_TEXT_MAIN     = "#F1F5F9"  # 主文字与输入框内容：高对比亮白
+    C_TEXT_SUB      = "#94A3B8"  # 次级说明与路径文字：冷银灰
+    C_TEXT_MUTED    = "#5A6578"  # 弱化英文代号与辅助说明
+
+    # 重点高亮色（仅用于 5 大核心视觉焦点，引导操作视线）
+    C_ACCENT_BLUE   = "#0A84FF"  # 核心焦点蓝（选中态边框、主下拉、步骤铭牌）
+    C_ACCENT_CYAN   = "#38BDF8"  # 遥测高亮青（帧区间、时间线码表）
+    C_ACCENT_GREEN  = "#10B981"  # 就绪/主执行绿（当前母版镜头、自动拆层、主生成按钮）
+    C_ACCENT_AMBER  = "#F59E0B"  # 强调/渲染橙（自发光激活、播放态、启动渲染按钮）
+    C_ACCENT_RED    = "#EF4444"  # 警示红（未绑定状态）
+
+    # 次级辅助按钮保持低调深灰金属质感，绝不抢主按钮风头
+    C_BTN_DARK      = "#212631"
+    C_BTN_HOVER     = "#2C3342"
 
     FONT_UI         = "Microsoft YaHei UI"
     FONT_MONO       = "Consolas"
@@ -2870,7 +2885,6 @@ def show_render_layer_dialog():
     win.attributes('-topmost', True)
     win.resizable(True, True)
 
-    # 全局禁止非输入组件产生焦点虚线框与默认高亮粗白框
     win.option_add("*Frame.takeFocus", 0)
     win.option_add("*Label.takeFocus", 0)
     win.option_add("*Button.takeFocus", 0)
@@ -2880,7 +2894,6 @@ def show_render_layer_dialog():
     win.option_add("*Menubutton.takeFocus", 0)
     win.option_add("*Menubutton.highlightThickness", 0)
 
-    # 隐藏焦点接收器：点击空白处或按钮时自动收敛 Entry 光标并关闭已展开的下拉框
     _dummy_focus_sink = tk.Frame(win, width=0, height=0, bg=C_BG_MAIN, highlightthickness=0, bd=0, takefocus=1)
     _dummy_focus_sink.place(x=-10, y=-10)
 
@@ -2919,15 +2932,15 @@ def show_render_layer_dialog():
         btn_widget.bind("<Enter>", _on_enter)
         btn_widget.bind("<Leave>", _on_leave)
 
-    def _create_section_header(parent_card, step_num_str, title_cn, subtitle_en="", accent_color=C_ACCENT_BLUE):
-        """构建带左侧视觉锚点色条、序号胶囊与右侧弱化副标题的工业级卡片 Header"""
+    def _create_section_header(parent_card, step_num_str, title_cn, subtitle_en="", bar_color=C_ACCENT_BLUE):
+        """构建高辨识度的工业级模块顶栏（左侧亮色能量条 + 科技蓝序号牌 + 亮白标题）"""
         hdr = tk.Frame(parent_card, bg=C_CARD_HEADER, padx=12, pady=6)
         hdr.pack(fill="x")
-        tk.Frame(hdr, bg=accent_color, width=3, height=14).pack(side="left", padx=(0, 8))
+        tk.Frame(hdr, bg=bar_color, width=3, height=15).pack(side="left", padx=(0, 8))
         tk.Label(
-            hdr, text=f" {step_num_str} ", fg=C_ACCENT_AMBER, bg="#111317",
-            font=(FONT_MONO, 8, "bold"), padx=4, pady=1
-        ).pack(side="left", padx=(0, 8))
+            hdr, text=f" {step_num_str} ", fg="#FFFFFF", bg=bar_color,
+            font=(FONT_MONO, 8, "bold"), padx=4, pady=0
+        ).pack(side="left", padx=(0, 9))
         tk.Label(
             hdr, text=title_cn, fg=C_TEXT_MAIN, bg=C_CARD_HEADER,
             font=(FONT_UI, 9, "bold")
@@ -2950,21 +2963,25 @@ def show_render_layer_dialog():
     linked_ue_dir_var = tk.StringVar(master=win, value="")
     seq_filter_var = tk.StringVar(master=win, value="")
 
-    # 记录当前已同步的母版序列包路径与帧范围，用于自动感知用户在 UE 中切换了新的 Sequence
     _last_synced_seq_pkg = [master_seq.get_path_name().split('.')[0] if master_seq else ""]
     _last_synced_range = [(start_f, end_f_inc)]
 
     # =========================================================================
-    # 顶部 Header 仪表盘 (镜头上下文 + 前缀筛选舱 + 零抖动定宽 Sequencer 实时播控台)
+    # 【视觉焦点 1】顶部 Header 仪表盘 (高对比度镜头遥测舱 + 零抖动 Sequencer 播控台)
     # =========================================================================
     header_bar = tk.Frame(
         win, bg=C_DOCK_BG,
-        highlightbackground=C_CARD_BORDER, highlightcolor=C_CARD_BORDER, highlightthickness=1,
-        padx=16, pady=9
+        highlightbackground=C_CARD_BORDER, highlightcolor=C_CARD_BORDER, highlightthickness=1
     )
     header_bar.pack(fill="x", padx=14, pady=(10, 5))
 
-    title_row = tk.Frame(header_bar, bg=C_DOCK_BG)
+    # 顶部 2px 科技蓝旗舰导光条
+    tk.Frame(header_bar, bg=C_ACCENT_BLUE, height=2).pack(fill="x")
+
+    header_body = tk.Frame(header_bar, bg=C_DOCK_BG, padx=14, pady=8)
+    header_body.pack(fill="x")
+
+    title_row = tk.Frame(header_body, bg=C_DOCK_BG)
     title_row.pack(fill="x", pady=(0, 7))
 
     tk.Frame(title_row, bg=C_ACCENT_BLUE, width=4, height=18).pack(side="left", padx=(0, 8))
@@ -2993,38 +3010,38 @@ def show_render_layer_dialog():
 
     tk.Label(
         title_row, text=f" STUDIO PRO v{TOOL_VERSION_TAG} ",
-        fg="#0D0F12", bg=C_ACCENT_CYAN, font=(FONT_MONO, 8, "bold"), padx=7, pady=1
+        fg="#0E1015", bg=C_ACCENT_CYAN, font=(FONT_MONO, 8, "bold"), padx=7, pady=1
     ).pack(side="right")
 
-    # --- 第一行：镜头上下文遥测栏 + 母版镜头前缀筛选舱 ---
+    # --- 第一行：高辨识度镜头遥测舱 + 镜头前缀筛选舱 ---
     ctx_row = tk.Frame(
-        header_bar, bg=C_SUBBAR_BG,
-        highlightbackground="#232934", highlightcolor="#232934", highlightthickness=1,
+        header_body, bg=C_SUBBAR_BG,
+        highlightbackground="#222938", highlightcolor="#222938", highlightthickness=1,
         padx=10, pady=5
     )
     ctx_row.pack(fill="x")
 
-    tk.Label(ctx_row, text="SHOT", fg=C_ACCENT_BLUE, bg="#0E1015", font=(FONT_MONO, 7, "bold"), padx=4, pady=1).pack(side="left", padx=(0, 5))
-    tk.Label(ctx_row, text="母版序列:", fg=C_TEXT_SUB, bg=C_SUBBAR_BG, font=(FONT_UI, 9)).pack(side="left")
+    tk.Label(ctx_row, text="ACTIVE SHOT", fg=C_ACCENT_GREEN, bg="#091512", font=(FONT_MONO, 7, "bold"), padx=5, pady=1).pack(side="left", padx=(0, 6))
+    tk.Label(ctx_row, text="母版序列:", fg=C_TEXT_SUB, bg=C_SUBBAR_BG, font=(FONT_UI, 9, "bold")).pack(side="left")
 
-    seq_badge_wrap = tk.Frame(ctx_row, bg=C_INPUT_BG, highlightbackground=C_INPUT_BORDER, highlightthickness=1)
-    seq_badge_wrap.pack(side="left", padx=(5, 6))
-    lbl_seq_badge = tk.Label(seq_badge_wrap, text="", fg=C_ACCENT_GREEN, bg=C_INPUT_BG, font=(FONT_MONO, 9, "bold"), padx=9, pady=2)
+    seq_badge_wrap = tk.Frame(ctx_row, bg="#0B211B", highlightbackground="#10B981", highlightthickness=1)
+    seq_badge_wrap.pack(side="left", padx=(6, 6))
+    lbl_seq_badge = tk.Label(seq_badge_wrap, text="", fg="#34D399", bg="#0B211B", font=(FONT_MONO, 9, "bold"), padx=10, pady=2)
     lbl_seq_badge.pack()
 
     lbl_sync_tag = tk.Label(
-        ctx_row, text="● SYNC", fg=C_ACCENT_GREEN, bg="#101816",
-        font=(FONT_MONO, 7, "bold"), padx=4, pady=1
+        ctx_row, text="● AUTO-SYNC", fg=C_ACCENT_GREEN, bg="#0D1916",
+        font=(FONT_MONO, 7, "bold"), padx=5, pady=1
     )
     lbl_sync_tag.pack(side="left", padx=(0, 10))
 
     tk.Frame(ctx_row, bg=C_CARD_BORDER, width=1, height=18).pack(side="left", padx=(0, 10))
 
-    tk.Label(ctx_row, text="帧区间:", fg=C_TEXT_SUB, bg=C_SUBBAR_BG, font=(FONT_UI, 9)).pack(side="left")
+    tk.Label(ctx_row, text="帧区间:", fg=C_TEXT_SUB, bg=C_SUBBAR_BG, font=(FONT_UI, 9, "bold")).pack(side="left")
 
-    frame_badge_wrap = tk.Frame(ctx_row, bg=C_INPUT_BG, highlightbackground=C_INPUT_BORDER, highlightthickness=1)
-    frame_badge_wrap.pack(side="left", padx=(5, 8))
-    lbl_frame_badge = tk.Label(frame_badge_wrap, text="", fg=C_ACCENT_CYAN, bg=C_INPUT_BG, font=(FONT_MONO, 9, "bold"), padx=9, pady=2)
+    frame_badge_wrap = tk.Frame(ctx_row, bg="#0C1E31", highlightbackground="#0284C7", highlightthickness=1)
+    frame_badge_wrap.pack(side="left", padx=(6, 8))
+    lbl_frame_badge = tk.Label(frame_badge_wrap, text="", fg=C_ACCENT_CYAN, bg="#0C1E31", font=(FONT_MONO, 9, "bold"), padx=10, pady=2)
     lbl_frame_badge.pack()
 
     lbl_link_badge_ref = [None]
@@ -3044,13 +3061,13 @@ def show_render_layer_dialog():
             if lbl_link_badge_ref[0]:
                 lbl_link_badge_ref[0].config(text="● 已联动", fg=C_ACCENT_GREEN)
             if ent_link_dir_ref[0]:
-                ent_link_dir_ref[0].config(fg=C_ACCENT_GREEN)
+                ent_link_dir_ref[0].config(fg=C_TEXT_MAIN)
         else:
             linked_ue_dir_var.set("")
             if lbl_link_badge_ref[0]:
                 lbl_link_badge_ref[0].config(text="● 未绑定", fg=C_ACCENT_RED)
             if ent_link_dir_ref[0]:
-                ent_link_dir_ref[0].config(fg=C_ACCENT_RED)
+                ent_link_dir_ref[0].config(fg=C_TEXT_MUTED)
             if prompt_if_missing:
                 chosen = filedialog.askdirectory(
                     parent=win,
@@ -3063,15 +3080,17 @@ def show_render_layer_dialog():
                     if lbl_link_badge_ref[0]:
                         lbl_link_badge_ref[0].config(text="● 已绑定", fg=C_ACCENT_GREEN)
                     if ent_link_dir_ref[0]:
-                        ent_link_dir_ref[0].config(fg=C_ACCENT_GREEN)
+                        ent_link_dir_ref[0].config(fg=C_TEXT_MAIN)
 
     def _update_seq_badges(seq_obj, sf, ef_inc, prompt_missing_path=False):
         if seq_obj and sf is not None and ef_inc is not None:
             total_len = ef_inc - sf + 1
-            lbl_seq_badge.config(text=f"● {seq_obj.get_name()}", fg=C_ACCENT_GREEN)
-            lbl_frame_badge.config(text=f"{sf:04d} - {ef_inc:04d}  ({total_len} Frames)", fg=C_ACCENT_CYAN)
+            seq_badge_wrap.config(bg="#0B211B", highlightbackground="#10B981")
+            lbl_seq_badge.config(text=f"● {seq_obj.get_name()}", fg="#34D399", bg="#0B211B")
+            lbl_frame_badge.config(text=f"{sf:04d} - {ef_inc:04d}  ({total_len}f)", fg=C_ACCENT_CYAN)
         else:
-            lbl_seq_badge.config(text="● 未打开母版序列 (请从右侧选择)", fg=C_ACCENT_RED)
+            seq_badge_wrap.config(bg="#241215", highlightbackground=C_ACCENT_RED)
+            lbl_seq_badge.config(text="● 未打开母版序列 (请从右侧选择)", fg=C_ACCENT_RED, bg="#241215")
             lbl_frame_badge.config(text="---- ~ ----", fg=C_TEXT_MUTED)
         _sync_shot_linked_output_path(seq_obj, prompt_if_missing=prompt_missing_path)
 
@@ -3088,6 +3107,8 @@ def show_render_layer_dialog():
                 _last_synced_seq_pkg[0] = master_seq.get_path_name().split('.')[0]
                 _last_synced_range[0] = (start_f, end_f_inc)
                 _update_seq_badges(master_seq, start_f, end_f_inc, prompt_missing_path=True)
+                if getattr(sys, "_LL_CAM_ACTOR_PILOT_ACTIVE", False):
+                    _pilot_shot_camera_actor_directly(master_seq)
                 _refresh_transport_ui()
 
     def _refresh_master_seq(allow_cb=True):
@@ -3102,6 +3123,8 @@ def show_render_layer_dialog():
         _last_synced_seq_pkg[0] = master_seq.get_path_name().split('.')[0] if master_seq else ""
         _last_synced_range[0] = (start_f, end_f_inc)
         _update_seq_badges(master_seq, start_f, end_f_inc, prompt_missing_path=True)
+        if getattr(sys, "_LL_CAM_ACTOR_PILOT_ACTIVE", False) and master_seq:
+            _pilot_shot_camera_actor_directly(master_seq)
         _refresh_transport_ui()
 
     def _open_current_output_dir():
@@ -3110,7 +3133,7 @@ def show_render_layer_dialog():
             _PopupToplevelMessage(win, "提示", "当前尚未生成输出目录或队列为空！请先点击底部绿色按钮生成队列。")
 
     btn_open_dir = tk.Button(
-        ctx_row, text="打开输出文件夹", command=_open_current_output_dir,
+        ctx_row, text="打开输出文件夹 ↗", command=_open_current_output_dir,
         bg=C_BTN_DARK, fg=C_ACCENT_AMBER, activebackground=C_BTN_HOVER, activeforeground="#FFFFFF",
         font=(FONT_UI, 8, "bold"), relief="flat", bd=0, padx=10, pady=3, cursor="hand2"
     )
@@ -3138,7 +3161,6 @@ def show_render_layer_dialog():
         flt_low = raw_flt.lower()
 
         if flt_low:
-            # 优先匹配以该前缀开头的镜头，同时支持包含匹配（如直接输入镜头号 2240）
             prefix_matched = [(n, p) for n, p in master_items if n.lower().startswith(flt_low)]
             contains_matched = [(n, p) for n, p in master_items if not n.lower().startswith(flt_low) and flt_low in n.lower()]
             filtered_items = prefix_matched + contains_matched
@@ -3170,22 +3192,22 @@ def show_render_layer_dialog():
     _populate_seq_menu()
     mb_seq.pack(side="right", padx=(3, 3))
 
-    # --- 新增：母版镜头前缀筛选舱 (位于「选择母版镜头 ▾」正前方/左侧) ---
+    # --- 母版镜头前缀筛选舱 ---
     flt_capsule = tk.Frame(
-        ctx_row, bg="#101319",
-        highlightbackground="#283040", highlightcolor=C_ACCENT_BLUE, highlightthickness=1,
+        ctx_row, bg="#0F131A",
+        highlightbackground="#283142", highlightcolor=C_ACCENT_BLUE, highlightthickness=1,
         padx=6, pady=2
     )
     flt_capsule.pack(side="right", padx=(4, 2))
 
     tk.Label(
-        flt_capsule, text="镜头前缀:", fg=C_TEXT_SUB, bg="#101319",
+        flt_capsule, text="镜头前缀:", fg=C_TEXT_SUB, bg="#0F131A",
         font=(FONT_UI, 8)
     ).pack(side="left", padx=(2, 4))
 
     ent_seq_filter = tk.Entry(
         flt_capsule, textvariable=seq_filter_var, width=9,
-        bg=C_INPUT_BG, fg=C_ACCENT_CYAN, insertbackground="#FFFFFF",
+        bg=C_INPUT_BG, fg=C_TEXT_MAIN, insertbackground="#FFFFFF",
         relief="flat", highlightbackground=C_INPUT_BORDER, highlightcolor=C_ACCENT_BLUE, highlightthickness=1,
         font=(FONT_MONO, 8, "bold")
     )
@@ -3199,7 +3221,6 @@ def show_render_layer_dialog():
         master_items = pipe.list_all_master_sequences_in_project()
         fm.add_command(label=f"  全部镜头 (All - 共 {len(master_items)} 个)", command=lambda: seq_filter_var.set(""))
 
-        # 自动从工程现有序列名中提取常用前缀 (如 ep01_, ep28_, sc01_, cam 等)
         prefix_counts = {}
         for s_name, _ in master_items:
             if "_" in s_name:
@@ -3227,7 +3248,7 @@ def show_render_layer_dialog():
     mb_seq_flt.pack(side="left", padx=(2, 0))
 
     btn_clr_seq_flt = tk.Label(
-        flt_capsule, text="×", fg=C_TEXT_MUTED, bg="#101319",
+        flt_capsule, text="×", fg=C_TEXT_MUTED, bg="#0F131A",
         font=(FONT_MONO, 9, "bold"), padx=4, cursor="hand2"
     )
     btn_clr_seq_flt.pack(side="left", padx=(1, 0))
@@ -3237,24 +3258,24 @@ def show_render_layer_dialog():
 
     def _on_seq_filter_var_changed(*args):
         has_flt = bool(seq_filter_var.get().strip())
-        flt_capsule.config(highlightbackground=C_ACCENT_CYAN if has_flt else "#283040")
+        flt_capsule.config(highlightbackground=C_ACCENT_BLUE if has_flt else "#283142")
         btn_clr_seq_flt.config(fg=C_ACCENT_AMBER if has_flt else C_TEXT_MUTED)
 
     seq_filter_var.trace_add("write", _on_seq_filter_var_changed)
 
     # =========================================================================
-    # --- 第二行：零抖动定宽 Sequencer 时间线播控台 (ZERO-JITTER STUDIO TRANSPORT) ---
-    # 全部子模块均锁死固定像素宽高 (pack_propagate(False)) + 纯 Canvas 矢量图标，点击播放 0.0px 抖动！
+    # 【视觉焦点 2】零抖动定宽 Sequencer 播控台 + 锁定摄影机本体 (PILOT CAMERA ACTOR)
+    # 不锁 Camera Cuts，直接 Pilot 当前镜头 CineCameraActor 本体并选中，方便在另一窗口自由调整相机位置！
     # =========================================================================
     transport_row = tk.Frame(
-        header_bar, bg="#11141B",
-        highlightbackground="#222836", highlightcolor="#222836", highlightthickness=1,
+        header_body, bg=C_SUBBAR_BG,
+        highlightbackground="#222938", highlightcolor="#222938", highlightthickness=1,
         height=36
     )
     transport_row.pack(fill="x", pady=(6, 0))
     transport_row.pack_propagate(False)
 
-    transport_inner = tk.Frame(transport_row, bg="#11141B", padx=10)
+    transport_inner = tk.Frame(transport_row, bg=C_SUBBAR_BG, padx=10)
     transport_inner.pack(fill="both", expand=True)
 
     def _ensure_sequencer_ready():
@@ -3286,6 +3307,143 @@ def show_render_layer_dialog():
             return bool(unreal.LevelSequenceEditorBlueprintLibrary.is_playing())
         except Exception:
             return False
+
+    def _find_shot_camera_actor(seq_obj=None):
+        """
+        精准查找当前镜头对应的场景 CineCameraActor / CameraActor 本体：
+        1. 优先匹配包含 cam{shot} 的 CineCameraActor；
+        2. 其次匹配包含镜头号 {shot} 的 CineCameraActor / CameraActor；
+        3. 兜底匹配当前选中的相机或场景内唯一相机。
+        """
+        target_seq = seq_obj or master_seq or _ensure_sequencer_ready()
+        shot_str = ""
+        seq_name_low = ""
+        if target_seq:
+            _, shot_num = pipe.parse_ep_and_shot_from_seq(target_seq)
+            shot_str = str(shot_num).lower()
+            seq_name_low = target_seq.get_name().lower()
+
+        all_cams = []
+        try:
+            for act in pipe.actor_sub.get_all_level_actors():
+                if isinstance(act, (unreal.CineCameraActor, unreal.CameraActor)):
+                    all_cams.append(act)
+        except Exception:
+            pass
+
+        if not all_cams:
+            return None
+
+        if shot_str:
+            # 1. 优先找标签含 cam{shot} 的 CineCameraActor
+            for act in all_cams:
+                lbl = act.get_actor_label().lower()
+                if f"cam{shot_str}" in lbl and isinstance(act, unreal.CineCameraActor):
+                    return act
+            # 2. 找标签含镜头号 {shot} 的 CineCameraActor
+            for act in all_cams:
+                lbl = act.get_actor_label().lower()
+                if shot_str in lbl and isinstance(act, unreal.CineCameraActor):
+                    return act
+            # 3. 找标签含镜头号 {shot} 的任意 CameraActor
+            for act in all_cams:
+                lbl = act.get_actor_label().lower()
+                if shot_str in lbl or (seq_name_low and seq_name_low in lbl):
+                    return act
+
+        # 4. 若当前已在大纲选中了某台摄影机，直接使用
+        try:
+            for sel_a in pipe.actor_sub.get_selected_level_actors():
+                if isinstance(sel_a, (unreal.CineCameraActor, unreal.CameraActor)):
+                    return sel_a
+        except Exception:
+            pass
+
+        return all_cams[0]
+
+    def _pilot_shot_camera_actor_directly(seq_obj=None):
+        """
+        不锁定 Camera Cuts 轨道，而是直接将视口 Pilot 锁定到当前镜头的摄影机 Actor 本体，
+        并在大纲/细节面板中自动选中该摄影机，方便用户在另一个窗口随时调整摄影机位置与参数！
+        """
+        cam_act = _find_shot_camera_actor(seq_obj)
+        if not cam_act:
+            return None
+
+        # 1. 强制关闭 Sequencer 的 Camera Cuts 视口锁定，防止 Camera Cuts 抢占或锁死相机变换
+        try:
+            if hasattr(unreal.LevelSequenceEditorBlueprintLibrary, "set_lock_camera_cut_to_viewport"):
+                unreal.LevelSequenceEditorBlueprintLibrary.set_lock_camera_cut_to_viewport(False)
+        except Exception:
+            pass
+
+        # 2. 先解除旧的 Pilot 状态，再直接 Pilot 当前镜头的 CineCameraActor 本体
+        lvl_ed_sub = None
+        try:
+            if hasattr(unreal, "LevelEditorSubsystem"):
+                lvl_ed_sub = unreal.get_editor_subsystem(unreal.LevelEditorSubsystem)
+        except Exception:
+            lvl_ed_sub = None
+
+        try:
+            if lvl_ed_sub and hasattr(lvl_ed_sub, "eject_pilot_level_actor"):
+                lvl_ed_sub.eject_pilot_level_actor()
+            elif hasattr(unreal.EditorLevelLibrary, "eject_pilot_level_actor"):
+                unreal.EditorLevelLibrary.eject_pilot_level_actor()
+        except Exception:
+            pass
+
+        try:
+            if lvl_ed_sub and hasattr(lvl_ed_sub, "pilot_level_actor"):
+                lvl_ed_sub.pilot_level_actor(cam_act)
+            else:
+                unreal.EditorLevelLibrary.pilot_level_actor(cam_act)
+        except Exception as e:
+            print(f"[RenderLayer] Pilot 锁定摄影机本体提示: {e}")
+
+        # 3. 自动在编辑器中选中该摄影机本体，方便用户在另一个窗口直接调整位移/旋转/焦距
+        try:
+            pipe.actor_sub.set_selected_level_actors([cam_act])
+        except Exception:
+            pass
+
+        sys._LL_CAM_ACTOR_PILOT_ACTIVE = True
+        sys._LL_PILOTED_CAM_ACTOR_PATH = cam_act.get_path_name()
+        return cam_act
+
+    def _eject_piloted_camera_actor():
+        """退出摄影机本体视口锁定 (Eject Pilot)"""
+        lvl_ed_sub = None
+        try:
+            if hasattr(unreal, "LevelEditorSubsystem"):
+                lvl_ed_sub = unreal.get_editor_subsystem(unreal.LevelEditorSubsystem)
+        except Exception:
+            lvl_ed_sub = None
+
+        try:
+            if lvl_ed_sub and hasattr(lvl_ed_sub, "eject_pilot_level_actor"):
+                lvl_ed_sub.eject_pilot_level_actor()
+            elif hasattr(unreal.EditorLevelLibrary, "eject_pilot_level_actor"):
+                unreal.EditorLevelLibrary.eject_pilot_level_actor()
+        except Exception as e:
+            print(f"[RenderLayer] 退出摄影机视口锁定提示: {e}")
+
+        sys._LL_CAM_ACTOR_PILOT_ACTIVE = False
+        sys._LL_PILOTED_CAM_ACTOR_PATH = ""
+
+    def _is_camera_actor_piloted():
+        return bool(getattr(sys, "_LL_CAM_ACTOR_PILOT_ACTIVE", False))
+
+    def _on_toggle_lock_camera_viewport():
+        """点击切换：直接锁定（Pilot）摄影机本体 / 退出锁定"""
+        _ensure_sequencer_ready()
+        if _is_camera_actor_piloted():
+            _eject_piloted_camera_actor()
+        else:
+            cam_obj = _pilot_shot_camera_actor_directly(master_seq)
+            if not cam_obj:
+                _PopupToplevelMessage(win, "未找到摄影机", "当前场景中未找到与该镜头对应的 CineCameraActor / CameraActor！")
+        _refresh_transport_ui()
 
     def _set_playhead_frame(target_frame, pause_if_playing=True):
         if target_frame is None:
@@ -3343,14 +3501,13 @@ def show_render_layer_dialog():
         if end_f_inc is not None:
             _set_playhead_frame(end_f_inc, pause_if_playing=True)
 
-    # --- [左区] 铭牌与定宽矢量播控键簇 ---
-    left_deck = tk.Frame(transport_inner, bg="#11141B")
+    left_deck = tk.Frame(transport_inner, bg=C_SUBBAR_BG)
     left_deck.pack(side="left", fill="y", pady=5)
 
     tk.Label(
         left_deck, text="TRANSPORT",
-        fg=C_ACCENT_CYAN, bg="#0B0D12", font=(FONT_MONO, 7, "bold"), padx=6
-    ).pack(side="left", fill="y", padx=(0, 8))
+        fg=C_ACCENT_CYAN, bg="#0A121E", font=(FONT_MONO, 7, "bold"), padx=6
+    ).pack(side="left", fill="y", padx=(0, 6))
 
     def _draw_vector_transport_icon(cv, icon_type, color):
         cv.delete("all")
@@ -3371,11 +3528,18 @@ def show_render_layer_dialog():
         elif icon_type == "last":
             cv.create_polygon(3, 3, 9, 7, 3, 11, fill=color, outline="")
             cv.create_rectangle(10, 3, 12, 11, fill=color, outline="")
+        elif icon_type == "cam_unlock":
+            cv.create_rectangle(1, 4, 10, 11, outline=color, width=1)
+            cv.create_polygon(10, 6, 14, 3, 14, 11, 10, 9, outline=color, fill="", width=1)
+        elif icon_type == "cam_lock":
+            cv.create_rectangle(1, 3, 10, 11, fill=color, outline="")
+            cv.create_polygon(10, 6, 15, 3, 15, 11, 10, 8, fill=color, outline="")
+            cv.create_oval(3, 5, 6, 8, fill="#0B192C", outline="")
 
     def _create_fixed_transport_pill(parent, width_px, icon_type, text_str, cmd_cb, icon_col=C_ACCENT_CYAN, fg_norm=C_TEXT_MAIN):
-        bg_norm  = "#1A1F2B"
-        bg_hov   = "#262E3F"
-        bd_norm  = "#2B3346"
+        bg_norm  = "#1B202B"
+        bg_hov   = "#272F3F"
+        bd_norm  = "#2B3344"
         bd_hov   = C_ACCENT_CYAN
 
         box = tk.Frame(
@@ -3424,25 +3588,23 @@ def show_render_layer_dialog():
 
         return box
 
-    # 1. 最前一帧 (定宽 74px)
-    _create_fixed_transport_pill(left_deck, 74, "first", "最前一帧", _on_jump_first_frame, icon_col=C_ACCENT_CYAN, fg_norm=C_TEXT_MAIN)
-    # 2. 上一帧 (定宽 58px)
-    _create_fixed_transport_pill(left_deck, 58, "prev", "-1帧", _on_step_prev_frame, icon_col=C_TEXT_SUB, fg_norm=C_TEXT_SUB)
+    _create_fixed_transport_pill(left_deck, 70, "first", "最前一帧", _on_jump_first_frame, icon_col=C_ACCENT_CYAN, fg_norm=C_TEXT_MAIN)
+    _create_fixed_transport_pill(left_deck, 54, "prev", "-1帧", _on_step_prev_frame, icon_col=C_TEXT_SUB, fg_norm=C_TEXT_SUB)
 
-    # 3. 播放/暂停主控胶囊 (严格锁死 104x24 像素，纯矢量切换，0.0px 尺寸变化)
+    # 播放/暂停核心主控胶囊 (定宽 98x24px)
     play_box = tk.Frame(
-        left_deck, width=104, height=24, bg="#0D9468",
+        left_deck, width=98, height=24, bg="#0D9468",
         highlightbackground=C_ACCENT_GREEN, highlightcolor=C_ACCENT_GREEN, highlightthickness=1,
         cursor="hand2"
     )
-    play_box.pack(side="left", padx=4)
+    play_box.pack(side="left", padx=3)
     play_box.pack_propagate(False)
 
     play_inner = tk.Frame(play_box, bg="#0D9468", cursor="hand2")
     play_inner.place(relx=0.5, rely=0.5, anchor="center")
 
     play_ic_cv = tk.Canvas(play_inner, width=14, height=14, bg="#0D9468", highlightthickness=0, bd=0, cursor="hand2")
-    play_ic_cv.pack(side="left", padx=(0, 4))
+    play_ic_cv.pack(side="left", padx=(0, 3))
     _draw_vector_transport_icon(play_ic_cv, "play", "#FFFFFF")
 
     play_lbl = tk.Label(
@@ -3490,34 +3652,98 @@ def show_render_layer_dialog():
         pw.bind("<Leave>", _on_play_leave)
         pw.bind("<Button-1>", _on_play_click)
 
-    # 4. 下一帧 (定宽 58px)
-    _create_fixed_transport_pill(left_deck, 58, "next", "+1帧", _on_step_next_frame, icon_col=C_TEXT_SUB, fg_norm=C_TEXT_SUB)
-    # 5. 最后一帧 (定宽 74px)
-    _create_fixed_transport_pill(left_deck, 74, "last", "最后一帧", _on_jump_last_frame, icon_col=C_ACCENT_CYAN, fg_norm=C_TEXT_MAIN)
+    _create_fixed_transport_pill(left_deck, 54, "next", "+1帧", _on_step_next_frame, icon_col=C_TEXT_SUB, fg_norm=C_TEXT_SUB)
+    _create_fixed_transport_pill(left_deck, 70, "last", "最后一帧", _on_jump_last_frame, icon_col=C_ACCENT_CYAN, fg_norm=C_TEXT_MAIN)
 
-    tk.Frame(transport_inner, bg=C_CARD_BORDER, width=1).pack(side="left", fill="y", padx=10, pady=7)
+    # 分隔线 + 摄影机本体 Pilot 锁定按钮 (定宽 102x24px, 0.0px 抖动)
+    tk.Frame(left_deck, bg=C_CARD_BORDER, width=1).pack(side="left", fill="y", padx=6, pady=3)
 
-    # --- [右区] 定宽数字帧码表舱 + 定宽状态胶囊 (锁死尺寸防止挤压滑轨) ---
-    right_deck = tk.Frame(transport_inner, bg="#11141B")
+    cam_lock_box = tk.Frame(
+        left_deck, width=102, height=24, bg="#1B202B",
+        highlightbackground="#2B3344", highlightcolor=C_ACCENT_BLUE, highlightthickness=1,
+        cursor="hand2"
+    )
+    cam_lock_box.pack(side="left", padx=(0, 2))
+    cam_lock_box.pack_propagate(False)
+
+    cam_lock_inner = tk.Frame(cam_lock_box, bg="#1B202B", cursor="hand2")
+    cam_lock_inner.place(relx=0.5, rely=0.5, anchor="center")
+
+    cam_lock_cv = tk.Canvas(cam_lock_inner, width=16, height=14, bg="#1B202B", highlightthickness=0, bd=0, cursor="hand2")
+    cam_lock_cv.pack(side="left", padx=(0, 4))
+
+    cam_lock_lbl = tk.Label(
+        cam_lock_inner, text="锁定相机", fg=C_TEXT_MAIN, bg="#1B202B",
+        font=(FONT_UI, 8, "bold"), cursor="hand2"
+    )
+    cam_lock_lbl.pack(side="left")
+
+    cam_hover_state = [False]
+
+    def _apply_cam_lock_visuals():
+        locked = _is_camera_actor_piloted()
+        is_hov = cam_hover_state[0]
+        if locked:
+            bg_c = "#1D4ED8" if is_hov else "#0A84FF"
+            bd_c = "#7DD3FC" if is_hov else "#38BDF8"
+            fg_c = "#FFFFFF"
+            ic_c = "#FFFFFF"
+            ic_mode = "cam_lock"
+            txt_s = "已锁相机"
+        else:
+            bg_c = "#272F3F" if is_hov else "#1B202B"
+            bd_c = C_ACCENT_CYAN if is_hov else "#2B3344"
+            fg_c = "#FFFFFF" if is_hov else C_TEXT_SUB
+            ic_c = "#FFFFFF" if is_hov else C_ACCENT_CYAN
+            ic_mode = "cam_unlock"
+            txt_s = "锁定相机"
+
+        cam_lock_box.config(bg=bg_c, highlightbackground=bd_c)
+        cam_lock_inner.config(bg=bg_c)
+        cam_lock_cv.config(bg=bg_c)
+        cam_lock_lbl.config(bg=bg_c, fg=fg_c, text=txt_s)
+        _draw_vector_transport_icon(cam_lock_cv, ic_mode, ic_c)
+
+    def _on_cam_enter(e):
+        cam_hover_state[0] = True
+        _apply_cam_lock_visuals()
+
+    def _on_cam_leave(e):
+        cam_hover_state[0] = False
+        _apply_cam_lock_visuals()
+
+    def _on_cam_click(e):
+        _on_toggle_lock_camera_viewport()
+        return "break"
+
+    for cw in (cam_lock_box, cam_lock_inner, cam_lock_cv, cam_lock_lbl):
+        cw.bind("<Enter>", _on_cam_enter)
+        cw.bind("<Leave>", _on_cam_leave)
+        cw.bind("<Button-1>", _on_cam_click)
+
+    _apply_cam_lock_visuals()
+
+    tk.Frame(transport_inner, bg=C_CARD_BORDER, width=1).pack(side="left", fill="y", padx=8, pady=7)
+
+    # --- [右区] 定宽帧数码表 + 定宽状态胶囊 ---
+    right_deck = tk.Frame(transport_inner, bg=C_SUBBAR_BG)
     right_deck.pack(side="right", fill="y", pady=5)
 
-    # 定宽 146px 帧数计数器舱
     readout_box = tk.Frame(
-        right_deck, width=146, height=24, bg=C_INPUT_BG,
-        highlightbackground="#252C3A", highlightcolor="#252C3A", highlightthickness=1
+        right_deck, width=142, height=24, bg=C_INPUT_BG,
+        highlightbackground="#252E3E", highlightcolor="#252E3E", highlightthickness=1
     )
     readout_box.pack(side="left", padx=(6, 4))
     readout_box.pack_propagate(False)
 
     lbl_cur_frame_readout = tk.Label(
-        readout_box, text="FRAME  ---- / ----",
+        readout_box, text="F: ---- / ----",
         fg=C_ACCENT_CYAN, bg=C_INPUT_BG, font=(FONT_MONO, 8, "bold")
     )
     lbl_cur_frame_readout.place(relx=0.5, rely=0.5, anchor="center")
 
-    # 定宽 84px 播放状态指示舱 (PAUSED 与 PLAYING 切换时宽度严格锁死 84px)
     state_box = tk.Frame(
-        right_deck, width=84, height=24, bg="#0B0D12",
+        right_deck, width=82, height=24, bg="#0B0D12",
         highlightbackground="#1F2532", highlightcolor="#1F2532", highlightthickness=1
     )
     state_box.pack(side="left")
@@ -3529,13 +3755,13 @@ def show_render_layer_dialog():
     )
     lbl_play_state_tag.place(relx=0.5, rely=0.5, anchor="center")
 
-    # --- [中区] 工业级时间线刻度滑轨 (Interactive Timeline Scrubber) ---
-    scrub_wrap = tk.Frame(transport_inner, bg="#11141B")
+    # --- [中区] 自适应时间线刻度滑轨 ---
+    scrub_wrap = tk.Frame(transport_inner, bg=C_SUBBAR_BG)
     scrub_wrap.pack(side="left", fill="both", expand=True, pady=6)
 
     scrub_cv = tk.Canvas(
-        scrub_wrap, height=22, bg="#0B0D12",
-        highlightbackground="#242B3A", highlightcolor=C_ACCENT_BLUE, highlightthickness=1,
+        scrub_wrap, height=22, bg=C_INPUT_BG,
+        highlightbackground="#242C3C", highlightcolor=C_ACCENT_BLUE, highlightthickness=1,
         bd=0, cursor="hand2"
     )
     scrub_cv.pack(fill="both", expand=True)
@@ -3552,11 +3778,11 @@ def show_render_layer_dialog():
     scrub_cv.bind("<B1-Motion>", lambda e: _scrub_to_mouse_x(e.x))
 
     def _refresh_transport_ui():
-        """实时刷新播控台状态，所有容器像素宽高恒定，0.0px 抖动"""
         playing = _is_sequencer_playing()
         cur_f = _get_current_playhead_frame()
 
         _apply_play_box_colors()
+        _apply_cam_lock_visuals()
 
         if playing:
             lbl_play_state_tag.config(text="● PLAYING", fg=C_ACCENT_AMBER)
@@ -3581,22 +3807,19 @@ def show_render_layer_dialog():
             ratio = float(clamped_f - int(start_f)) / float(span)
             playhead_x = pad_x + int(ratio * track_w)
 
-            # 1. 绘制时间线中心导槽与帧刻度尺
             mid_y = h // 2
             scrub_cv.create_rectangle(pad_x, mid_y - 2, w - pad_x, mid_y + 2, fill="#161B24", outline="")
             for i in range(21):
                 tx = pad_x + int((track_w * i) / 20)
                 tick_h = 4 if i % 5 == 0 else 2
-                scrub_cv.create_line(tx, h - tick_h - 1, tx, h - 1, fill="#262F40" if i % 5 == 0 else "#1B212D", width=1)
+                scrub_cv.create_line(tx, h - tick_h - 1, tx, h - 1, fill="#283142" if i % 5 == 0 else "#1B212D", width=1)
 
-            # 2. 绘制已走过的进度高亮带
             bar_col = C_ACCENT_AMBER if playing else C_ACCENT_BLUE
-            glow_bg = "#36250E" if playing else "#112642"
+            glow_bg = "#36250E" if playing else "#122642"
             if playhead_x > pad_x:
                 scrub_cv.create_rectangle(pad_x, 3, playhead_x, h - 3, fill=glow_bg, outline="")
                 scrub_cv.create_rectangle(pad_x, mid_y - 1, playhead_x, mid_y + 2, fill=bar_col, outline="")
 
-            # 3. 绘制 UE5 Sequencer 风格倒三角指针头与竖线
             scrub_cv.create_line(playhead_x, 1, playhead_x, h - 1, fill="#FFFFFF", width=1)
             scrub_cv.create_polygon(
                 playhead_x - 4, 1,
@@ -3611,125 +3834,260 @@ def show_render_layer_dialog():
     scrub_cv.bind("<Configure>", lambda e: _refresh_transport_ui())
 
     # =========================================================================
-    # 第一区：01 分层渲染模式 + 02 输出版本策略与路径联动 (双列对称卡片)
+    # 【视觉焦点 3】01 分层渲染模式 + 02 版本策略与路径联动 (双重几何锁死，切换模式 0.0px 位移)
     # =========================================================================
-    row1_container = tk.Frame(win, bg=C_BG_MAIN)
+    row1_container = tk.Frame(win, bg=C_BG_MAIN, height=148)
     row1_container.pack(fill="x", padx=14, pady=4)
-    row1_container.columnconfigure(0, weight=11)
-    row1_container.columnconfigure(1, weight=9)
+    row1_container.pack_propagate(False)
+    row1_container.grid_propagate(False)
+    row1_container.columnconfigure(0, weight=55, uniform="row1_bento")
+    row1_container.columnconfigure(1, weight=45, uniform="row1_bento")
+    row1_container.rowconfigure(0, weight=1)
 
-    # --- 01 分层渲染模式卡片 ---
+    # --- 01 分层渲染模式卡片 (锁死尺寸) ---
     card_mode = tk.Frame(
         row1_container, bg=C_CARD_BG,
         highlightbackground=C_CARD_BORDER, highlightcolor=C_CARD_BORDER, highlightthickness=1
     )
     card_mode.grid(row=0, column=0, sticky="nsew", padx=(0, 5))
+    card_mode.pack_propagate(False)
 
     _create_section_header(
-        card_mode, "01", "分层渲染模式",
-        subtitle_en="RENDER LAYER MODE · NUKE AUTO-COMP", accent_color=C_ACCENT_BLUE
+        card_mode, "01", "分层渲染模式 (RENDER LAYER MODE)",
+        subtitle_en="NUKE AUTO-COMP READY", bar_color=C_ACCENT_BLUE
     )
 
-    body_mode = tk.Frame(card_mode, bg=C_CARD_BG, padx=14, pady=8)
+    body_mode = tk.Frame(card_mode, bg=C_CARD_BG, padx=12, pady=7)
     body_mode.pack(fill="both", expand=True)
+    body_mode.pack_propagate(False)
 
-    opt_row_single = tk.Frame(body_mode, bg=C_SUBBAR_BG, padx=8, pady=2)
-    opt_row_single.pack(fill="x", pady=2)
-    tk.Radiobutton(
+    opt_row_single = tk.Frame(
+        body_mode, bg=C_SUBBAR_BG, height=27,
+        highlightbackground="#222834", highlightcolor="#222834", highlightthickness=1,
+        padx=10, cursor="hand2"
+    )
+    opt_row_single.pack(fill="x", pady=(0, 4))
+    opt_row_single.pack_propagate(False)
+
+    rb_single = tk.Radiobutton(
         opt_row_single,
         text="模式一：单层快速模式   [ 主镜头 + ID_actor + ID_material ]",
         variable=mode_var, value="single",
         fg=C_TEXT_MAIN, bg=C_SUBBAR_BG, selectcolor=C_INPUT_BG,
-        activebackground=C_SUBBAR_BG, activeforeground=C_ACCENT_CYAN,
+        activebackground=C_SUBBAR_BG, activeforeground="#FFFFFF",
         font=(FONT_UI, 9, "bold"), highlightthickness=0, bd=0, cursor="hand2"
-    ).pack(side="left")
-    tk.Label(opt_row_single, text="3 Sequences", fg=C_TEXT_MUTED, bg=C_SUBBAR_BG, font=(FONT_MONO, 8)).pack(side="right")
+    )
+    rb_single.pack(side="left", fill="y")
 
-    opt_row_multi = tk.Frame(body_mode, bg=C_SUBBAR_BG, padx=8, pady=2)
-    opt_row_multi.pack(fill="x", pady=2)
-    tk.Radiobutton(
+    slot_tag_single = tk.Frame(opt_row_single, width=116, height=21, bg=C_SUBBAR_BG, cursor="hand2")
+    slot_tag_single.pack(side="right")
+    slot_tag_single.pack_propagate(False)
+    lbl_tag_single = tk.Label(slot_tag_single, text="3 Sequences", anchor="e", fg=C_TEXT_MUTED, bg=C_SUBBAR_BG, font=(FONT_MONO, 8, "bold"), cursor="hand2")
+    lbl_tag_single.pack(side="right", fill="y")
+
+    opt_row_multi = tk.Frame(
+        body_mode, bg=C_SUBBAR_BG, height=27,
+        highlightbackground="#222834", highlightcolor="#222834", highlightthickness=1,
+        padx=10, cursor="hand2"
+    )
+    opt_row_multi.pack(fill="x", pady=(0, 4))
+    opt_row_multi.pack_propagate(False)
+
+    rb_multi = tk.Radiobutton(
         opt_row_multi,
         text="模式二：多层全拆分模式 [ env / key / sky / fill / heightfog / fog + 双ID ]",
         variable=mode_var, value="multi",
-        fg=C_ACCENT_GREEN, bg=C_SUBBAR_BG, selectcolor=C_INPUT_BG,
-        activebackground=C_SUBBAR_BG, activeforeground=C_ACCENT_GREEN,
+        fg=C_TEXT_MAIN, bg=C_SUBBAR_BG, selectcolor=C_INPUT_BG,
+        activebackground=C_SUBBAR_BG, activeforeground="#FFFFFF",
         font=(FONT_UI, 9, "bold"), highlightthickness=0, bd=0, cursor="hand2"
-    ).pack(side="left")
-    tk.Label(opt_row_multi, text="8~9 Sequences", fg=C_ACCENT_GREEN, bg=C_SUBBAR_BG, font=(FONT_MONO, 8)).pack(side="right")
+    )
+    rb_multi.pack(side="left", fill="y")
 
-    opt_row_emiss = tk.Frame(body_mode, bg=C_CARD_BG, padx=4, pady=2)
-    opt_row_emiss.pack(fill="x", pady=(3, 0))
-    tk.Checkbutton(
+    slot_tag_multi = tk.Frame(opt_row_multi, width=116, height=21, bg=C_SUBBAR_BG, cursor="hand2")
+    slot_tag_multi.pack(side="right")
+    slot_tag_multi.pack_propagate(False)
+    lbl_tag_multi = tk.Label(slot_tag_multi, text="8~9 Sequences", anchor="e", fg=C_TEXT_MUTED, bg=C_SUBBAR_BG, font=(FONT_MONO, 8, "bold"), cursor="hand2")
+    lbl_tag_multi.pack(side="right", fill="y")
+
+    opt_row_emiss = tk.Frame(
+        body_mode, bg=C_SUBBAR_BG, height=27,
+        highlightbackground="#222834", highlightcolor="#222834", highlightthickness=1,
+        padx=10, cursor="hand2"
+    )
+    opt_row_emiss.pack(fill="x")
+    opt_row_emiss.pack_propagate(False)
+
+    cb_emiss = tk.Checkbutton(
         opt_row_emiss,
-        text="生成自发光层 (cam_emiss — 单层/多层均支持，自动挂载 MPC_Global_Emiss)",
+        text="额外生成自发光层 (cam_emiss — 自动挂载 MPC_Global_Emiss)",
         variable=emiss_var,
-        fg=C_ACCENT_AMBER, bg=C_CARD_BG, selectcolor=C_INPUT_BG,
-        activebackground=C_CARD_BG, activeforeground=C_ACCENT_AMBER,
+        fg=C_TEXT_SUB, bg=C_SUBBAR_BG, selectcolor=C_INPUT_BG,
+        activebackground=C_SUBBAR_BG, activeforeground=C_TEXT_MAIN,
         font=(FONT_UI, 9), highlightthickness=0, bd=0, cursor="hand2"
-    ).pack(side="left")
-    tk.Label(opt_row_emiss, text="MPC.Emiss", fg=C_TEXT_MUTED, bg=C_CARD_BG, font=(FONT_MONO, 8)).pack(side="right")
+    )
+    cb_emiss.pack(side="left", fill="y")
 
-    # --- 02 输出版本策略与路径联动卡片 ---
+    slot_tag_emiss = tk.Frame(opt_row_emiss, width=116, height=21, bg=C_SUBBAR_BG, cursor="hand2")
+    slot_tag_emiss.pack(side="right")
+    slot_tag_emiss.pack_propagate(False)
+    lbl_tag_emiss = tk.Label(slot_tag_emiss, text="MPC.Emiss", anchor="e", fg=C_TEXT_MUTED, bg=C_SUBBAR_BG, font=(FONT_MONO, 8, "bold"), cursor="hand2")
+    lbl_tag_emiss.pack(side="right", fill="y")
+
+    for w in (opt_row_single, slot_tag_single, lbl_tag_single):
+        w.bind("<Button-1>", lambda e: mode_var.set("single"))
+    for w in (opt_row_multi, slot_tag_multi, lbl_tag_multi):
+        w.bind("<Button-1>", lambda e: mode_var.set("multi"))
+    for w in (opt_row_emiss, slot_tag_emiss, lbl_tag_emiss):
+        w.bind("<Button-1>", lambda e: emiss_var.set(not emiss_var.get()))
+
+    def _sync_mode_focus_visuals(*args):
+        if mode_var.get() == "single":
+            opt_row_single.config(bg=C_ACTIVE_ROW_BG, highlightbackground=C_ACCENT_BLUE, highlightcolor=C_ACCENT_BLUE)
+            rb_single.config(bg=C_ACTIVE_ROW_BG, fg="#FFFFFF", activebackground=C_ACTIVE_ROW_BG)
+            slot_tag_single.config(bg=C_ACTIVE_ROW_BG)
+            lbl_tag_single.config(bg=C_ACTIVE_ROW_BG, fg=C_ACCENT_CYAN, text="● 当前启用 (3层)")
+
+            opt_row_multi.config(bg=C_SUBBAR_BG, highlightbackground="#222834", highlightcolor="#222834")
+            rb_multi.config(bg=C_SUBBAR_BG, fg=C_TEXT_SUB, activebackground=C_SUBBAR_BG)
+            slot_tag_multi.config(bg=C_SUBBAR_BG)
+            lbl_tag_multi.config(bg=C_SUBBAR_BG, fg=C_TEXT_MUTED, text="8~9 Sequences")
+        else:
+            opt_row_multi.config(bg="#112421", highlightbackground=C_ACCENT_GREEN, highlightcolor=C_ACCENT_GREEN)
+            rb_multi.config(bg="#112421", fg="#FFFFFF", activebackground="#112421")
+            slot_tag_multi.config(bg="#112421")
+            lbl_tag_multi.config(bg="#112421", fg="#34D399", text="● 当前启用 (8~9层)")
+
+            opt_row_single.config(bg=C_SUBBAR_BG, highlightbackground="#222834", highlightcolor="#222834")
+            rb_single.config(bg=C_SUBBAR_BG, fg=C_TEXT_SUB, activebackground=C_SUBBAR_BG)
+            slot_tag_single.config(bg=C_SUBBAR_BG)
+            lbl_tag_single.config(bg=C_SUBBAR_BG, fg=C_TEXT_MUTED, text="3 Sequences")
+
+    def _sync_emiss_focus_visuals(*args):
+        if emiss_var.get():
+            opt_row_emiss.config(bg="#241D11", highlightbackground=C_ACCENT_AMBER, highlightcolor=C_ACCENT_AMBER)
+            cb_emiss.config(bg="#241D11", fg=C_ACCENT_AMBER, activebackground="#241D11")
+            slot_tag_emiss.config(bg="#241D11")
+            lbl_tag_emiss.config(bg="#241D11", fg=C_ACCENT_AMBER, text="● 已开启自发光")
+        else:
+            opt_row_emiss.config(bg=C_SUBBAR_BG, highlightbackground="#222834", highlightcolor="#222834")
+            cb_emiss.config(bg=C_SUBBAR_BG, fg=C_TEXT_SUB, activebackground=C_SUBBAR_BG)
+            slot_tag_emiss.config(bg=C_SUBBAR_BG)
+            lbl_tag_emiss.config(bg=C_SUBBAR_BG, fg=C_TEXT_MUTED, text="MPC.Emiss")
+
+    mode_var.trace_add("write", _sync_mode_focus_visuals)
+    emiss_var.trace_add("write", _sync_emiss_focus_visuals)
+    _sync_mode_focus_visuals()
+    _sync_emiss_focus_visuals()
+
+    # --- 02 输出版本策略与路径联动卡片 (锁死尺寸) ---
     card_ver = tk.Frame(
         row1_container, bg=C_CARD_BG,
         highlightbackground=C_CARD_BORDER, highlightcolor=C_CARD_BORDER, highlightthickness=1
     )
     card_ver.grid(row=0, column=1, sticky="nsew", padx=(5, 0))
+    card_ver.pack_propagate(False)
 
     hdr_ver = _create_section_header(
         card_ver, "02", "输出版本策略与相机路径联动",
-        subtitle_en="", accent_color=C_ACCENT_GREEN
+        subtitle_en="", bar_color=C_ACCENT_GREEN
     )
     tk.Label(
         hdr_ver, text="● 镜头跑完即刻弹窗",
         fg=C_ACCENT_GREEN, bg=C_CARD_HEADER, font=(FONT_UI, 8, "bold")
     ).pack(side="right")
 
-    body_ver = tk.Frame(card_ver, bg=C_CARD_BG, padx=14, pady=8)
+    body_ver = tk.Frame(card_ver, bg=C_CARD_BG, padx=12, pady=7)
     body_ver.pack(fill="both", expand=True)
+    body_ver.pack_propagate(False)
 
-    ver_row_inc = tk.Frame(body_ver, bg=C_SUBBAR_BG, padx=8, pady=1)
-    ver_row_inc.pack(fill="x", pady=2)
-    tk.Radiobutton(
+    ver_row_inc = tk.Frame(
+        body_ver, bg=C_SUBBAR_BG, height=27,
+        highlightbackground="#222834", highlightcolor="#222834", highlightthickness=1,
+        padx=10, cursor="hand2"
+    )
+    ver_row_inc.pack(fill="x", pady=(0, 4))
+    ver_row_inc.pack_propagate(False)
+
+    rb_ver_inc = tk.Radiobutton(
         ver_row_inc,
-        text="自动递增版本 (若 v001 已有图，自动新建 v002 / v003)",
+        text="自动递增版本",
         variable=inc_ver_var, value=True,
-        fg=C_ACCENT_GREEN, bg=C_SUBBAR_BG, selectcolor=C_INPUT_BG,
-        activebackground=C_SUBBAR_BG, activeforeground=C_ACCENT_GREEN,
-        font=(FONT_UI, 9, "bold"), highlightthickness=0, bd=0, cursor="hand2"
-    ).pack(side="left")
-    tk.Label(ver_row_inc, text="v001 ➔ v002", fg=C_TEXT_MUTED, bg=C_SUBBAR_BG, font=(FONT_MONO, 8)).pack(side="right")
-
-    ver_row_rep = tk.Frame(body_ver, bg=C_SUBBAR_BG, padx=8, pady=1)
-    ver_row_rep.pack(fill="x", pady=2)
-    tk.Radiobutton(
-        ver_row_rep,
-        text="直接替换当前版本 (渲染时直接覆盖旧图)",
-        variable=inc_ver_var, value=False,
         fg=C_TEXT_MAIN, bg=C_SUBBAR_BG, selectcolor=C_INPUT_BG,
-        activebackground=C_SUBBAR_BG, activeforeground=C_ACCENT_AMBER,
-        font=(FONT_UI, 9), highlightthickness=0, bd=0, cursor="hand2"
-    ).pack(side="left")
-    tk.Label(ver_row_rep, text="OVERWRITE", fg=C_TEXT_MUTED, bg=C_SUBBAR_BG, font=(FONT_MONO, 8)).pack(side="right")
+        activebackground=C_SUBBAR_BG, activeforeground="#FFFFFF",
+        font=(FONT_UI, 9, "bold"), highlightthickness=0, bd=0, cursor="hand2"
+    )
+    rb_ver_inc.pack(side="left", fill="y")
 
-    link_row = tk.Frame(body_ver, bg=C_CARD_BG)
-    link_row.pack(fill="x", pady=(6, 0))
+    slot_tag_inc = tk.Frame(ver_row_inc, width=104, height=21, bg=C_SUBBAR_BG, cursor="hand2")
+    slot_tag_inc.pack(side="right")
+    slot_tag_inc.pack_propagate(False)
+    lbl_tag_inc = tk.Label(slot_tag_inc, text="v001 ➔ v002", anchor="e", fg=C_TEXT_MUTED, bg=C_SUBBAR_BG, font=(FONT_MONO, 8, "bold"), cursor="hand2")
+    lbl_tag_inc.pack(side="right", fill="y")
+
+    ver_row_rep = tk.Frame(
+        body_ver, bg=C_SUBBAR_BG, height=27,
+        highlightbackground="#222834", highlightcolor="#222834", highlightthickness=1,
+        padx=10, cursor="hand2"
+    )
+    ver_row_rep.pack(fill="x", pady=(0, 4))
+    ver_row_rep.pack_propagate(False)
+
+    rb_ver_rep = tk.Radiobutton(
+        ver_row_rep,
+        text="直接替换当前版本",
+        variable=inc_ver_var, value=False,
+        fg=C_TEXT_SUB, bg=C_SUBBAR_BG, selectcolor=C_INPUT_BG,
+        activebackground=C_SUBBAR_BG, activeforeground="#FFFFFF",
+        font=(FONT_UI, 9, "bold"), highlightthickness=0, bd=0, cursor="hand2"
+    )
+    rb_ver_rep.pack(side="left", fill="y")
+
+    slot_tag_rep = tk.Frame(ver_row_rep, width=104, height=21, bg=C_SUBBAR_BG, cursor="hand2")
+    slot_tag_rep.pack(side="right")
+    slot_tag_rep.pack_propagate(False)
+    lbl_tag_rep = tk.Label(slot_tag_rep, text="OVERWRITE", anchor="e", fg=C_TEXT_MUTED, bg=C_SUBBAR_BG, font=(FONT_MONO, 8, "bold"), cursor="hand2")
+    lbl_tag_rep.pack(side="right", fill="y")
+
+    for w in (ver_row_inc, slot_tag_inc, lbl_tag_inc):
+        w.bind("<Button-1>", lambda e: inc_ver_var.set(True))
+    for w in (ver_row_rep, slot_tag_rep, lbl_tag_rep):
+        w.bind("<Button-1>", lambda e: inc_ver_var.set(False))
+
+    def _sync_ver_focus_visuals(*args):
+        if inc_ver_var.get():
+            ver_row_inc.config(bg=C_ACTIVE_ROW_BG, highlightbackground=C_ACCENT_BLUE, highlightcolor=C_ACCENT_BLUE)
+            rb_ver_inc.config(bg=C_ACTIVE_ROW_BG, fg="#FFFFFF", activebackground=C_ACTIVE_ROW_BG)
+            slot_tag_inc.config(bg=C_ACTIVE_ROW_BG)
+            lbl_tag_inc.config(bg=C_ACTIVE_ROW_BG, fg=C_ACCENT_CYAN, text="● v001 ➔ v002")
+
+            ver_row_rep.config(bg=C_SUBBAR_BG, highlightbackground="#222834", highlightcolor="#222834")
+            rb_ver_rep.config(bg=C_SUBBAR_BG, fg=C_TEXT_SUB, activebackground=C_SUBBAR_BG)
+            slot_tag_rep.config(bg=C_SUBBAR_BG)
+            lbl_tag_rep.config(bg=C_SUBBAR_BG, fg=C_TEXT_MUTED, text="OVERWRITE")
+        else:
+            ver_row_rep.config(bg=C_ACTIVE_ROW_BG, highlightbackground=C_ACCENT_BLUE, highlightcolor=C_ACCENT_BLUE)
+            rb_ver_rep.config(bg=C_ACTIVE_ROW_BG, fg="#FFFFFF", activebackground=C_ACTIVE_ROW_BG)
+            slot_tag_rep.config(bg=C_ACTIVE_ROW_BG)
+            lbl_tag_rep.config(bg=C_ACTIVE_ROW_BG, fg=C_ACCENT_CYAN, text="● 直接覆盖")
+
+            ver_row_inc.config(bg=C_SUBBAR_BG, highlightbackground="#222834", highlightcolor="#222834")
+            rb_ver_inc.config(bg=C_SUBBAR_BG, fg=C_TEXT_SUB, activebackground=C_SUBBAR_BG)
+            slot_tag_inc.config(bg=C_SUBBAR_BG)
+            lbl_tag_inc.config(bg=C_SUBBAR_BG, fg=C_TEXT_MUTED, text="v001 ➔ v002")
+
+    inc_ver_var.trace_add("write", _sync_ver_focus_visuals)
+    _sync_ver_focus_visuals()
+
+    link_row = tk.Frame(body_ver, bg=C_CARD_BG, height=27)
+    link_row.pack(fill="x")
+    link_row.pack_propagate(False)
 
     lbl_link_badge = tk.Label(
         link_row, text="● 检测中", fg=C_ACCENT_GREEN, bg=C_INPUT_BG,
-        font=(FONT_UI, 8, "bold"), padx=8, pady=3
+        font=(FONT_UI, 8, "bold"), padx=8, pady=2
     )
-    lbl_link_badge.pack(side="left", padx=(0, 5))
+    lbl_link_badge.pack(side="left", padx=(0, 5), fill="y")
     lbl_link_badge_ref[0] = lbl_link_badge
-
-    ent_link_dir = tk.Entry(
-        link_row, textvariable=linked_ue_dir_var, bg=C_INPUT_BG, fg=C_ACCENT_GREEN,
-        insertbackground="#FFFFFF", relief="flat",
-        highlightbackground=C_INPUT_BORDER, highlightcolor=C_ACCENT_BLUE, highlightthickness=1,
-        font=(FONT_MONO, 8)
-    )
-    ent_link_dir.pack(side="left", fill="x", expand=True, padx=2, ipady=3)
-    ent_link_dir_ref[0] = ent_link_dir
 
     def _on_browse_ue_output_dir():
         ep, shot = pipe.parse_ep_and_shot_from_seq(master_seq) if master_seq else ("EP01", "1001")
@@ -3742,21 +4100,30 @@ def show_render_layer_dialog():
             linked_ue_dir_var.set(norm_c)
             pipe.save_linked_ue_output_root(ep, shot, norm_c)
             lbl_link_badge.config(text="● 已绑定", fg=C_ACCENT_GREEN)
-            ent_link_dir.config(fg=C_ACCENT_GREEN)
+            ent_link_dir.config(fg=C_TEXT_MAIN)
 
     btn_browse_out = tk.Button(
         link_row, text="指定目录", command=_on_browse_ue_output_dir,
-        bg=C_BTN_DARK, fg=C_ACCENT_CYAN, activebackground=C_BTN_HOVER, activeforeground="#FFFFFF",
-        relief="flat", bd=0, font=(FONT_UI, 8, "bold"), padx=10, pady=3, cursor="hand2"
+        bg=C_BTN_DARK, fg=C_TEXT_MAIN, activebackground=C_BTN_HOVER, activeforeground="#FFFFFF",
+        relief="flat", bd=0, font=(FONT_UI, 8, "bold"), padx=10, pady=2, cursor="hand2"
     )
-    btn_browse_out.pack(side="right", padx=(5, 0))
+    btn_browse_out.pack(side="right", padx=(5, 0), fill="y")
     _bind_hover(btn_browse_out, C_BTN_DARK, C_BTN_HOVER)
+
+    ent_link_dir = tk.Entry(
+        link_row, textvariable=linked_ue_dir_var, bg=C_INPUT_BG, fg=C_TEXT_MAIN,
+        insertbackground="#FFFFFF", relief="flat",
+        highlightbackground=C_INPUT_BORDER, highlightcolor=C_ACCENT_BLUE, highlightthickness=1,
+        font=(FONT_MONO, 8)
+    )
+    ent_link_dir.pack(side="left", fill="both", expand=True, padx=2)
+    ent_link_dir_ref[0] = ent_link_dir
 
     _update_seq_badges(master_seq, start_f, end_f_inc, prompt_missing_path=False)
     _refresh_transport_ui()
 
     # =========================================================================
-    # 第二区：03 子关卡映射与场景自动拆分矩阵 (SUBLEVEL MAPPING MATRIX)
+    # 【视觉焦点 4】03 子关卡映射矩阵 (突出一键归类主按钮 + 3 类功能色标分组)
     # =========================================================================
     card_lvl = tk.Frame(
         win, bg=C_CARD_BG,
@@ -3766,21 +4133,20 @@ def show_render_layer_dialog():
 
     hdr_lvl = _create_section_header(
         card_lvl, "03", "子关卡映射与场景自动拆分 (SUBLEVEL MAPPING MATRIX)",
-        subtitle_en="", accent_color=C_ACCENT_AMBER
+        subtitle_en="", bar_color=C_ACCENT_AMBER
     )
 
     lbl_sublevel_status = tk.Label(hdr_lvl, text="", fg=C_ACCENT_GREEN, bg=C_CARD_HEADER, font=(FONT_UI, 8, "bold"))
     lbl_sublevel_status.pack(side="right")
 
-    # 子关卡顶部工具条
     lvl_bar = tk.Frame(card_lvl, bg=C_SUBBAR_BG, padx=14, pady=7)
     lvl_bar.pack(fill="x")
     tk.Frame(card_lvl, bg=C_DIVIDER, height=1).pack(fill="x")
 
-    tk.Label(lvl_bar, text="PREFIX", fg=C_TEXT_MUTED, bg=C_SUBBAR_BG, font=(FONT_MONO, 8, "bold")).pack(side="left", padx=(0, 4))
+    tk.Label(lvl_bar, text="PREFIX", fg=C_ACCENT_CYAN, bg="#0A121E", font=(FONT_MONO, 7, "bold"), padx=5, pady=1).pack(side="left", padx=(0, 5))
     tk.Label(lvl_bar, text="命名前缀:", fg=C_TEXT_SUB, bg=C_SUBBAR_BG, font=(FONT_UI, 8)).pack(side="left")
     tk.Entry(
-        lvl_bar, textvariable=prefix_var, width=9, bg=C_INPUT_BG, fg=C_ACCENT_GREEN,
+        lvl_bar, textvariable=prefix_var, width=9, bg=C_INPUT_BG, fg=C_TEXT_MAIN,
         insertbackground="#FFFFFF", relief="flat",
         highlightbackground=C_INPUT_BORDER, highlightcolor=C_ACCENT_BLUE, highlightthickness=1,
         font=(FONT_MONO, 9, "bold")
@@ -3795,7 +4161,7 @@ def show_render_layer_dialog():
 
     tk.Label(lvl_bar, text="Light 存放目录:", fg=C_TEXT_SUB, bg=C_SUBBAR_BG, font=(FONT_UI, 8)).pack(side="left")
     tk.Entry(
-        lvl_bar, textvariable=light_dir_var, width=28, bg=C_INPUT_BG, fg=C_ACCENT_CYAN,
+        lvl_bar, textvariable=light_dir_var, width=28, bg=C_INPUT_BG, fg=C_TEXT_SUB,
         insertbackground="#FFFFFF", relief="flat",
         highlightbackground=C_INPUT_BORDER, highlightcolor=C_ACCENT_BLUE, highlightthickness=1,
         font=(FONT_MONO, 9)
@@ -3884,7 +4250,7 @@ def show_render_layer_dialog():
         _PopupToplevelMessage(win, "灯光与雾自动归类完成", msg)
 
     btn_auto_split = tk.Button(
-        lvl_bar, text="自动创建并归类灯光/雾 (不移scence)", command=_on_auto_split_lights_and_fog,
+        lvl_bar, text="⚡ 创建并归类灯光/雾 (不移scence)", command=_on_auto_split_lights_and_fog,
         bg="#0D9468", fg="#FFFFFF", activebackground=C_ACCENT_GREEN, activeforeground="#FFFFFF",
         relief="flat", bd=0, font=(FONT_UI, 8, "bold"), padx=11, pady=3, cursor="hand2"
     )
@@ -3893,42 +4259,41 @@ def show_render_layer_dialog():
 
     btn_empty_sub = tk.Button(
         lvl_bar, text="创建空白灯光/雾子关卡", command=_on_create_empty_sublevels,
-        bg=C_BTN_DARK, fg=C_ACCENT_AMBER, activebackground=C_BTN_HOVER, activeforeground="#FFFFFF",
-        relief="flat", bd=0, font=(FONT_UI, 8, "bold"), padx=10, pady=3, cursor="hand2"
+        bg=C_BTN_DARK, fg=C_TEXT_MAIN, activebackground=C_BTN_HOVER, activeforeground="#FFFFFF",
+        relief="flat", bd=0, font=(FONT_UI, 8), padx=10, pady=3, cursor="hand2"
     )
     btn_empty_sub.pack(side="right", padx=3)
     _bind_hover(btn_empty_sub, C_BTN_DARK, C_BTN_HOVER)
 
     btn_rescan_lvl = tk.Button(
         lvl_bar, text="刷新识别 (.umap)", command=_refresh_sublevel_widgets,
-        bg=C_BTN_DARK, fg=C_ACCENT_CYAN, activebackground=C_BTN_HOVER, activeforeground="#FFFFFF",
-        relief="flat", bd=0, font=(FONT_UI, 8, "bold"), padx=10, pady=3, cursor="hand2"
+        bg=C_BTN_DARK, fg=C_TEXT_MAIN, activebackground=C_BTN_HOVER, activeforeground="#FFFFFF",
+        relief="flat", bd=0, font=(FONT_UI, 8), padx=10, pady=3, cursor="hand2"
     )
     btn_rescan_lvl.pack(side="right", padx=3)
     _bind_hover(btn_rescan_lvl, C_BTN_DARK, C_BTN_HOVER)
 
     btn_guide = tk.Button(
         lvl_bar, text="存放规范说明", command=_show_split_guide_popup,
-        bg=C_BTN_DARK, fg=C_TEXT_MAIN, activebackground=C_BTN_HOVER, activeforeground="#FFFFFF",
+        bg=C_BTN_DARK, fg=C_TEXT_SUB, activebackground=C_BTN_HOVER, activeforeground="#FFFFFF",
         relief="flat", bd=0, font=(FONT_UI, 8), padx=10, pady=3, cursor="hand2"
     )
     btn_guide.pack(side="right", padx=3)
-    _bind_hover(btn_guide, C_BTN_DARK, C_BTN_HOVER)
+    _bind_hover(btn_guide, C_BTN_DARK, C_BTN_HOVER, C_TEXT_SUB, "#FFFFFF")
 
-    # 7 大子关卡双列网格矩阵
     grid_lvl = tk.Frame(card_lvl, bg=C_CARD_BG, padx=14, pady=9)
     grid_lvl.pack(fill="x")
     grid_lvl.columnconfigure(1, weight=1)
     grid_lvl.columnconfigure(4, weight=1)
 
     role_short_tags = {
-        "scence":    ("GEO",   C_ACCENT_CYAN),
-        "env":       ("ENV",   C_ACCENT_GREEN),
-        "key":       ("KEY",   C_ACCENT_AMBER),
-        "sky":       ("SKY",   C_ACCENT_BLUE),
-        "heightfog": ("HFOG",  "#A78BFA"),
-        "fill":      ("FILL",  C_ACCENT_AMBER),
-        "fog":       ("EFOG",  "#A78BFA"),
+        "scence":    ("GEO",  C_ACCENT_CYAN),
+        "env":       ("ENV",  C_ACCENT_AMBER),
+        "key":       ("KEY",  C_ACCENT_AMBER),
+        "sky":       ("SKY",  C_ACCENT_AMBER),
+        "heightfog": ("HFOG", "#818CF8"),
+        "fill":      ("FILL", C_ACCENT_AMBER),
+        "fog":       ("EFOG", "#818CF8"),
     }
 
     for idx, (k, base_sfx, _, label_txt, _) in enumerate(SUBLEVEL_ROLE_SPECS):
@@ -3941,10 +4306,11 @@ def show_render_layer_dialog():
         tag_txt, tag_col = role_short_tags.get(k, ("LVL", C_TEXT_MUTED))
         tk.Label(
             lbl_cell, text=f"{label_txt}:", anchor="e",
-            fg=C_TEXT_SUB, bg=C_CARD_BG, font=(FONT_UI, 9)
+            fg=C_TEXT_MAIN if k == "scence" else C_TEXT_SUB,
+            bg=C_CARD_BG, font=(FONT_UI, 9, "bold" if k == "scence" else "normal")
         ).pack(side="right")
         tk.Label(
-            lbl_cell, text=f"{tag_txt}", fg=tag_col, bg="#111317",
+            lbl_cell, text=f"{tag_txt:^4}", fg=tag_col, bg="#0D1016",
             font=(FONT_MONO, 7, "bold"), padx=4, pady=1
         ).pack(side="right", padx=(0, 6))
 
@@ -3965,15 +4331,14 @@ def show_render_layer_dialog():
         lvl_Menus[k] = menu_popup
         mb.grid(row=r_idx, column=c_idx + 2, sticky="w", padx=(4, 16), pady=4)
 
-    # 第 8 格对称补充说明条（让 2x4 矩阵左右完全对齐）
     hint_cell = tk.Frame(
         grid_lvl, bg=C_SUBBAR_BG,
-        highlightbackground="#222731", highlightcolor="#222731", highlightthickness=1,
+        highlightbackground="#222834", highlightcolor="#222834", highlightthickness=1,
         padx=10, pady=4
     )
     hint_cell.grid(row=3, column=3, columnspan=3, sticky="ew", padx=(4, 16), pady=4)
     tk.Label(
-        hint_cell, text="ISOLATION RULE  |  仅主关卡已挂载的子关卡参与显隐轨道注入，自动过滤未挂载残留资产",
+        hint_cell, text="ISOLATION RULE  |  仅主关卡已挂载的子关卡参与显隐轨道注入",
         fg=C_TEXT_MUTED, bg=C_SUBBAR_BG, font=(FONT_UI, 8)
     ).pack(side="left")
 
@@ -3990,7 +4355,7 @@ def show_render_layer_dialog():
 
     hdr_mrq = _create_section_header(
         card_mrq, "04", "MRQ 渲染配置文件绑定 (RENDER PRESET BINDINGS)",
-        subtitle_en="", accent_color=C_ACCENT_CYAN
+        subtitle_en="", bar_color=C_ACCENT_CYAN
     )
 
     preset_vars = {}
@@ -4011,7 +4376,7 @@ def show_render_layer_dialog():
         if is_valid:
             lbl_b.config(text="● 已绑定", fg=C_ACCENT_GREEN)
             if ent_w:
-                ent_w.config(fg=C_ACCENT_GREEN)
+                ent_w.config(fg=C_TEXT_MAIN)
         elif not val or "未绑定" in val or "未找到" in val:
             lbl_b.config(text="● 未绑定", fg=C_ACCENT_RED)
             if ent_w:
@@ -4071,7 +4436,7 @@ def show_render_layer_dialog():
         title_cell.grid(row=row_i, column=0, sticky="w", padx=(2, 8), pady=4)
 
         tk.Label(
-            title_cell, text=f"{slot_tag:^8}", fg=C_ACCENT_CYAN, bg="#111317",
+            title_cell, text=f"{slot_tag:^8}", fg=C_ACCENT_CYAN, bg="#0D1016",
             font=(FONT_MONO, 7, "bold"), padx=4, pady=1
         ).pack(side="left", padx=(0, 6))
         tk.Label(
@@ -4089,7 +4454,7 @@ def show_render_layer_dialog():
 
         p_ent = tk.Entry(
             grid_mrq, textvariable=pv, bg=C_INPUT_BG,
-            fg=C_ACCENT_GREEN, insertbackground="#FFFFFF",
+            fg=C_TEXT_MAIN, insertbackground="#FFFFFF",
             relief="flat", highlightbackground=C_INPUT_BORDER, highlightcolor=C_ACCENT_BLUE, highlightthickness=1,
             font=(FONT_MONO, 9)
         )
@@ -4126,11 +4491,11 @@ def show_render_layer_dialog():
 
         btn_clr_p = tk.Button(
             grid_mrq, text="清空", command=lambda k=p_key: _clear_preset_slot(k),
-            bg=C_BTN_DARK, fg=C_ACCENT_RED, activebackground=C_BTN_HOVER, activeforeground="#FFFFFF",
-            relief="flat", bd=0, font=(FONT_UI, 8, "bold"), padx=9, pady=3, cursor="hand2"
+            bg=C_BTN_DARK, fg=C_TEXT_SUB, activebackground=C_BTN_HOVER, activeforeground=C_ACCENT_RED,
+            relief="flat", bd=0, font=(FONT_UI, 8), padx=9, pady=3, cursor="hand2"
         )
         btn_clr_p.grid(row=row_i, column=5, sticky="w", padx=(2, 2), pady=4)
-        _bind_hover(btn_clr_p, C_BTN_DARK, C_BTN_HOVER)
+        _bind_hover(btn_clr_p, C_BTN_DARK, C_BTN_HOVER, C_TEXT_SUB, C_ACCENT_RED)
 
     def _populate_preset_dropdowns(cand_list):
         for slot_k, p_m in preset_menus.items():
@@ -4145,12 +4510,12 @@ def show_render_layer_dialog():
     _populate_preset_dropdowns(all_preset_paths)
 
     # =========================================================================
-    # 第四区：底部核心命令执行坞 (COMMAND EXECUTION DOCK)
+    # 【视觉焦点 5】底部三阶发射台命令执行坞 (3-STAGE COMMAND LAUNCHPAD)
     # =========================================================================
     btn_bar = tk.Frame(
         win, bg=C_DOCK_BG,
         highlightbackground=C_CARD_BORDER, highlightcolor=C_CARD_BORDER, highlightthickness=1,
-        padx=12, pady=10
+        padx=12, pady=8
     )
     btn_bar.pack(fill="x", padx=14, pady=(5, 4))
 
@@ -4225,54 +4590,68 @@ def show_render_layer_dialog():
         if not ok:
             _PopupToplevelMessage(win, "渲染提示", msg)
 
-    btn_wrap_1 = tk.Frame(btn_bar, bg="#10B981", padx=1, pady=1)
-    btn_wrap_1.pack(side="left", fill="x", expand=True, padx=(0, 5))
-    btn_main_build = tk.Button(
-        btn_wrap_1,
-        text="1. 生成分层序列并加入 MRQ 队列",
-        command=_on_split_and_queue,
-        bg="#0D9468", fg="#FFFFFF", activebackground="#10B981", activeforeground="#FFFFFF",
-        font=(FONT_UI, 10, "bold"), relief="flat", bd=0, pady=8, cursor="hand2"
-    )
-    btn_main_build.pack(fill="both", expand=True)
-    _bind_hover(btn_main_build, "#0D9468", "#10B981")
+    def _build_command_pod(parent, step_tag, btn_label, cmd_cb, top_glow_col, btn_bg, btn_hover_bg, pad_x):
+        pod = tk.Frame(
+            parent, bg="#141821",
+            highlightbackground="#283040", highlightcolor=top_glow_col, highlightthickness=1
+        )
+        pod.pack(side="left", fill="x", expand=True, padx=pad_x)
+        tk.Frame(pod, bg=top_glow_col, height=2).pack(fill="x")
 
-    btn_wrap_2 = tk.Frame(btn_bar, bg=C_ACCENT_BLUE, padx=1, pady=1)
-    btn_wrap_2.pack(side="left", fill="x", expand=True, padx=5)
-    btn_requeue = tk.Button(
-        btn_wrap_2,
-        text="2. 仅将已有分层重新加入 MRQ",
-        command=_on_requeue_only,
-        bg="#0066CC", fg="#FFFFFF", activebackground=C_ACCENT_BLUE, activeforeground="#FFFFFF",
-        font=(FONT_UI, 10, "bold"), relief="flat", bd=0, pady=8, cursor="hand2"
-    )
-    btn_requeue.pack(fill="both", expand=True)
-    _bind_hover(btn_requeue, "#0066CC", C_ACCENT_BLUE)
+        sub_strip = tk.Frame(pod, bg="#141821", padx=10, pady=2)
+        sub_strip.pack(fill="x")
+        tk.Label(sub_strip, text=step_tag, fg=top_glow_col, bg="#141821", font=(FONT_MONO, 7, "bold")).pack(side="left")
+        tk.Label(sub_strip, text="READY", fg=C_TEXT_MUTED, bg="#141821", font=(FONT_MONO, 7)).pack(side="right")
 
-    btn_wrap_3 = tk.Frame(btn_bar, bg=C_ACCENT_AMBER, padx=1, pady=1)
-    btn_wrap_3.pack(side="left", fill="x", expand=True, padx=(5, 0))
-    btn_render_local = tk.Button(
-        btn_wrap_3,
-        text="3. 直接启动本地渲染 (Render Local)",
-        command=_on_render_now,
-        bg="#D97706", fg="#FFFFFF", activebackground=C_ACCENT_AMBER, activeforeground="#FFFFFF",
-        font=(FONT_UI, 10, "bold"), relief="flat", bd=0, pady=8, cursor="hand2"
+        btn = tk.Button(
+            pod, text=btn_label, command=cmd_cb,
+            bg=btn_bg, fg="#FFFFFF", activebackground=btn_hover_bg, activeforeground="#FFFFFF",
+            font=(FONT_UI, 10, "bold"), relief="flat", bd=0, pady=7, cursor="hand2"
+        )
+        btn.pack(fill="both", expand=True)
+
+        def _en(e):
+            btn.config(bg=btn_hover_bg)
+            pod.config(highlightbackground=top_glow_col)
+
+        def _lv(e):
+            btn.config(bg=btn_bg)
+            pod.config(highlightbackground="#283040")
+
+        btn.bind("<Enter>", _en)
+        btn.bind("<Leave>", _lv)
+        return btn
+
+    btn_main_build = _build_command_pod(
+        btn_bar, "STEP 01  //  BUILD & ENQUEUE",
+        "1. 生成分层序列并加入 MRQ 队列",
+        _on_split_and_queue, "#34D399", "#0D9468", "#10B981", (0, 5)
     )
-    btn_render_local.pack(fill="both", expand=True)
-    _bind_hover(btn_render_local, "#D97706", C_ACCENT_AMBER)
+
+    btn_requeue = _build_command_pod(
+        btn_bar, "STEP 02  //  RE-QUEUE EXISTING",
+        "2. 仅将已有分层重新加入 MRQ",
+        _on_requeue_only, "#38BDF8", "#0066CC", "#0A84FF", 5
+    )
+
+    btn_render_local = _build_command_pod(
+        btn_bar, "STEP 03  //  LOCAL PIE EXECUTOR",
+        "3. 直接启动本地渲染 (Render Local)",
+        _on_render_now, "#FBBF24", "#D97706", "#F59E0B", (5, 0)
+    )
 
     # =========================================================================
     # 第五区：底部创作者铭牌与社交主页跳转栏 (含 Bilibili #19a3d6)
     # =========================================================================
     footer_bar = tk.Frame(
         win, bg=C_DOCK_BG,
-        highlightbackground="#20252E", highlightcolor="#20252E", highlightthickness=1,
+        highlightbackground="#202530", highlightcolor="#202530", highlightthickness=1,
         padx=14, pady=6
     )
     footer_bar.pack(fill="x", padx=14, pady=(2, 10))
 
     tk.Label(
-        footer_bar, text="AUTHOR", fg="#0D0F12", bg=C_ACCENT_AMBER,
+        footer_bar, text="AUTHOR", fg="#0E1015", bg=C_ACCENT_AMBER,
         font=(FONT_MONO, 8, "bold"), padx=6, pady=1
     ).pack(side="left")
 
@@ -4311,7 +4690,6 @@ def show_render_layer_dialog():
         except Exception:
             pass
 
-    # 从右往左依次排列：Bilibili (位于 YouTube 右侧) <- YouTube <- GitHub <- Email
     bili_pill, _ = _create_social_icon_pill(footer_bar, "bilibili", "Bilibili", _open_bilibili)
     bili_pill.pack(side="right", padx=(6, 0))
 
@@ -4328,7 +4706,7 @@ def show_render_layer_dialog():
     win.update_idletasks()
     _enable_windows_dark_titlebar_and_pure_icon(win)
 
-    req_w = max(1120, win.winfo_reqwidth() + 24)
+    req_w = max(1140, win.winfo_reqwidth() + 24)
     req_h = win.winfo_reqheight() + 14
     scr_w = win.winfo_screenwidth()
     scr_h = win.winfo_screenheight()
@@ -4345,10 +4723,6 @@ def show_render_layer_dialog():
     _last_poll_ts = [0.0]
 
     def _auto_poll_sequencer_state():
-        """
-        实时检测用户在 UE 编辑器中打开/切换的新镜头序列 (如切换到 cam2240)
-        并自动同步 UI 的母版序列 Badge、帧范围、联动输出路径以及时间线播控台状态
-        """
         nonlocal master_seq, start_f, end_f_inc
         try:
             cur_open = unreal.LevelSequenceEditorBlueprintLibrary.get_current_level_sequence()
@@ -4363,6 +4737,8 @@ def show_render_layer_dialog():
                         _last_synced_seq_pkg[0] = new_pkg
                         _last_synced_range[0] = (sf, ef_inc)
                         _update_seq_badges(master_seq, start_f, end_f_inc, prompt_missing_path=False)
+                        if _is_camera_actor_piloted():
+                            _pilot_shot_camera_actor_directly(master_seq)
             _refresh_transport_ui()
         except Exception:
             pass
